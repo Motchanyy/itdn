@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+
+<head>
+	<%- include('../../../../partials/head'); %>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.7.2/css/lightgallery-bundle.min.css">
+	<style>
+		.chats-list-card .avatar { height:44px; width:44px; position:relative; display:flex; }
+		.chats-list-card h5 { font-size:0.9375rem; }
+		.chats-list-card .line-clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+		.chats-list-card .badge-circle { position:relative; border-radius:2.25rem; height:calc(1em + 0.778em); padding:0.389em; }
+		.chats-list-card .badge-circle>span { display:block; min-width:1em; }
+		.chats-list-card .card-body { position:relative; cursor:pointer; border-bottom:1px solid #d2d2d2; }
+		.chats-list-card .card-body:hover:after,
+		.chats-list-card .card-body:focus:after { background-color:#00d27a; }
+		.chats-list-card .card-body.active:after { background-color:#00d27a; }
+		.chats-list-card .card-body:after { position:absolute; content:""; height:100%; width:0.25rem; left:0; top:0; }
+		.chats-list-card .card-body.active:not(:first-child),
+		.chats-list-card .card-body.active+.card-body { border-top:1px solid #d8e2ef; }
+		form textarea { resize:none; }
+		.message-client .time { font-size:10px; color:#000; display:block; }
+		.message-manager { text-align:right; }
+		.message-manager>p { margin-left:35px; padding:15px; border-radius:12px; margin-bottom:0; display:inline-block; }
+		.message-manager .time { font-size:10px; color:#000; display:block; }
+	</style>
+</head>
+
+<body class="d-flex flex-column h-100">
+	<%- include('../../../../partials/header'); %>
+	<div class="container-fluid mt-3 h-100">
+		<div class="row h-100">
+
+			<% if (data_manager == 2) { %>
+			<div class="row h-100">
+				<div class="col-12 col-lg-12 mb-3 d-flex align-items-center justify-content-center">
+					<div class="alert alert-danger" role="alert">
+						<%- i18n.__('contact_center.chat.already_assigned').replace('\n', '<br>') %>
+					</div>
+				</div>
+			</div>
+			<% } else { %>
+
+			<div class="col-12 col-lg-3 mb-3">
+				<ul class="nav nav-underline nav-fill mb-3" id="pills-tab" role="tablist">
+					<li class="nav-item" role="presentation">
+						<button class="nav-link active" id="pills-home-tab" data-bs-toggle="pill"
+							data-bs-target="#pills-home" type="button" role="tab"
+							aria-controls="pills-home" aria-selected="true">
+							<%= i18n.__('contact_center.chat.tab_chat') %>
+						</button>
+					</li>
+					<li class="nav-item" role="presentation">
+						<button class="nav-link" id="pills-profile-tab" data-bs-toggle="pill"
+							data-bs-target="#pills-profile" type="button" role="tab"
+							aria-controls="pills-profile" aria-selected="false">
+							<%= i18n.__('contact_center.chat.tab_settings') %>
+						</button>
+					</li>
+					<li class="nav-item" role="presentation">
+						<button class="nav-link" id="pills-media-tab" data-bs-toggle="pill"
+							data-bs-target="#pills-media" type="button" role="tab"
+							aria-controls="pills-media" aria-selected="false">
+							<%= i18n.__('contact_center.chat.tab_media') %>
+						</button>
+					</li>
+				</ul>
+
+				<div class="tab-content" id="pills-tabContent">
+
+					<!-- TAB: Chat / User info -->
+					<div class="tab-pane fade show active" id="pills-home" role="tabpanel"
+						aria-labelledby="pills-home-tab" tabindex="0">
+						<form class="mb-3">
+							<div class="input-group">
+								<span class="input-group-text rounded-0" id="basic-addon1">
+									<i class="fa-solid fa-magnifying-glass"></i>
+								</span>
+								<input type="text" class="form-control rounded-0" placeholder="Search"
+									aria-label="Search" aria-describedby="basic-addon1" />
+							</div>
+						</form>
+						<div class="card rounded-0">
+							<div class="card-header rounded-0">
+								<%= i18n.__('contact_center.chat.user_info') %>
+							</div>
+							<div class="card-body chats-list-card">
+								<p>First name: <%= data_telegram[0].first_name %></p>
+								<p>Last name: <%= data_telegram[0].last_name %></p>
+								<p>Username: <%= data_telegram[0].username %></p>
+								<p>Language code: <%= data_telegram[0].language_code %></p>
+								<p>Bot:
+									<% if (data_telegram[0].is_bot == 0) { %>No Bot
+									<% } else if (data_telegram[0].is_bot == 1) { %>Bot
+									<% } else { %>---<% } %>
+								</p>
+								<p>Type: <%= data_telegram[0].type %></p>
+							</div>
+						</div>
+					</div>
+
+					<!-- TAB: Settings -->
+					<div class="tab-pane fade" id="pills-profile" role="tabpanel"
+						aria-labelledby="pills-profile-tab" tabindex="0">
+						<div class="card rounded-0">
+							<div class="card-header rounded-0">
+								<%= i18n.__('contact_center.chat.tab_settings') %>
+							</div>
+							<div class="card-body row chats-list-card">
+								<% if (data_manager == 0) { %>
+									<%# no buttons — not assigned yet %>
+								<% } else if (data_manager == 2) { %>
+									<div class="card-footer alert alert-danger m-0 rounded-0">
+										<p class="mb-0"><%= i18n.__('contact_center.chat.other_manager_notice') %></p>
+									</div>
+								<% } else { %>
+									<div class="col-12 col-md-6 mb-3">
+										<button type="button" class="btn btn-success rounded-0 w-100"
+											data-bs-toggle="modal" data-bs-target="#modal_resolve_chat">
+											<%= i18n.__('contact_center.chat.resolve_chat') %>
+										</button>
+									</div>
+									<div class="col-12 col-md-6 mb-3">
+										<button type="button" class="btn btn-primary rounded-0 w-100"
+											data-bs-toggle="modal" data-bs-target="#modal_archive_chat">
+											<%= i18n.__('contact_center.chat.archive_chat') %>
+										</button>
+									</div>
+									<div class="col-12 col-md-6 mb-3">
+										<button type="button" class="btn btn-primary rounded-0 w-100"
+											data-bs-toggle="modal" data-bs-target="#modal_delete_chat">
+											<%= i18n.__('contact_center.chat.delete_chat') %>
+										</button>
+									</div>
+									<div class="col-12 col-md-6 mb-3">
+										<button type="button" class="btn btn-primary rounded-0 w-100"
+											data-bs-toggle="modal" data-bs-target="#modal_delegate_chat">
+											<%= i18n.__('contact_center.chat.delegate_chat') %>
+										</button>
+									</div>
+								<% } %>
+							</div>
+						</div>
+					</div>
+
+					<!-- TAB: Media -->
+					<div class="tab-pane fade" id="pills-media" role="tabpanel"
+						aria-labelledby="pills-media-tab" tabindex="0">
+						<ul class="nav nav-pills nav-fill mb-3" id="media-type-tabs">
+							<li class="nav-item">
+								<button class="nav-link active px-2" data-media-type="photos">
+									<i class="fa-solid fa-image"></i>
+								</button>
+							</li>
+							<li class="nav-item">
+								<button class="nav-link px-2" data-media-type="videos">
+									<i class="fa-solid fa-video"></i>
+								</button>
+							</li>
+							<li class="nav-item">
+								<button class="nav-link px-2" data-media-type="files">
+									<i class="fa-solid fa-file"></i>
+								</button>
+							</li>
+							<li class="nav-item">
+								<button class="nav-link px-2" data-media-type="audio">
+									<i class="fa-solid fa-music"></i>
+								</button>
+							</li>
+							<li class="nav-item">
+								<button class="nav-link px-2" data-media-type="voice">
+									<i class="fa-solid fa-microphone"></i>
+								</button>
+							</li>
+							<li class="nav-item">
+								<button class="nav-link px-2" data-media-type="gifs">GIF</button>
+							</li>
+							<li class="nav-item">
+								<button class="nav-link px-2" data-media-type="links">
+									<i class="fa-solid fa-link"></i>
+								</button>
+							</li>
+						</ul>
+						<div id="media-content" style="overflow-y:auto; max-height:60vh;">
+							<div class="text-center p-3">
+								<%= i18n.__('contact_center.chat.select_media') %>
+							</div>
+						</div>
+					</div>
+
+				</div><!-- /tab-content -->
+			</div><!-- /col-3 -->
+
+			<!-- CHAT AREA -->
+			<div class="col-12 col-lg-9 mb-3">
+				<div class="card h-100 rounded-0">
+					<div class="card-header rounded-0"><%= i18n.__('contact_center.chat.tab_chat') %></div>
+					<div style="position:relative; height:100%; overflow:hidden; min-height:300px">
+						<div class="card-body" id="message_list"
+							style="position:absolute; top:0; bottom:0; left:0; right:0; width:100%; overflow-y:auto; scrollbar-color:rgba(182,193,210,0.55) transparent; scrollbar-width:thin">
+						</div>
+					</div>
+
+					<% if (data_manager == 0) { %>
+					<div class="card-footer alert alert-primary m-0 rounded-0">
+						<p><%= i18n.__('contact_center.chat.take_work_notice') %></p>
+						<button type="button" class="btn btn-primary btn-take-work rounded-0">
+							<%= i18n.__('contact_center.chat.btn_take_work') %>
+						</button>
+					</div>
+										<% } else { %>
+					<% var botDown = (typeof bot_available !== 'undefined' && bot_available === 0); %>
+					<% if (botDown) { %>
+					<div class="alert alert-warning m-0 rounded-0 border-0">
+						<i class="fa-solid fa-triangle-exclamation me-1"></i>
+						<%= bot_status_reason === 'inactive'
+							? i18n.__('contact_center.chat.bot_inactive')
+							: i18n.__('contact_center.chat.bot_deleted') %>
+					</div>
+					<% } else { %>
+					<form class="card-footer text-body-secondary bg-transparent p-0 rounded-0">
+						<textarea class="form-control border-0 rounded-0"
+							id="exampleFormControlTextarea1" name="message" rows="3"
+							placeholder="<%= i18n.__('contact_center.chat.message_placeholder') %>"
+							<%= botDown ? 'disabled' : '' %>></textarea>
+												<div class="d-flex justify-content-between p-3 pt-1">
+							<div class="btn-group" role="group">
+								<button type="button" class="btn btn-outline-primary rounded-0" id="emoji-btn" <%= botDown ? 'disabled' : '' %>>
+									<i class="fa-regular fa-face-smile"></i>
+								</button>
+								<label for="formFile" class="btn btn-outline-primary rounded-0 <%= botDown ? 'disabled' : '' %>">
+									<i class="fa-solid fa-paperclip"></i>
+								</label>
+								<input class="form-control d-none" type="file" id="formFile" <%= botDown ? 'disabled' : '' %> />
+								<div class="btn-group">
+									<button type="button"
+										class="btn btn-outline-primary rounded-0 dropdown-toggle-split"
+										data-bs-toggle="dropdown" aria-expanded="false" <%= botDown ? 'disabled' : '' %>>
+										<i class="fa-solid fa-terminal"></i>
+									</button>
+									<ul class="dropdown-menu rounded-0" id="telegram_commands">
+										<li><a class="dropdown-item request-contact" href="#">Request contact</a></li>
+										<li><a class="dropdown-item request-location" href="#">Request location</a></li>
+									</ul>
+								</div>
+							</div>
+							<button type="button" id="submitButton" class="btn btn-outline-primary rounded-0" <%= botDown ? 'disabled' : '' %>>
+								<%= i18n.__('contact_center.chat.send') %>
+							</button>
+						</div>
+					</form>
+					<% } %>
+					<% } %>
+				</div>
+			</div>
+
+			<% } %>
+		</div>
+	</div>
+
+	<!-- MODAL: Resolve -->
+	<div class="modal fade" id="modal_resolve_chat" tabindex="-1" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content rounded-0">
+				<div class="modal-header">
+					<h1 class="modal-title fs-5"><%= i18n.__('contact_center.chat.resolve_chat') %>?</h1>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body">
+					<p><%= i18n.__('contact_center.chat.confirm_resolve') %></p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary rounded-0" data-bs-dismiss="modal">
+						<%= i18n.__('contact_center.chat.close') %>
+					</button>
+					<button type="button" class="btn btn-success resolve-chat-submit rounded-0">
+						<%= i18n.__('contact_center.chat.resolve') %>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- MODAL: Archive -->
+	<div class="modal fade" id="modal_archive_chat" tabindex="-1" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content rounded-0">
+				<div class="modal-header">
+					<h1 class="modal-title fs-5"><%= i18n.__('contact_center.chat.archive_chat') %>?</h1>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body">
+					<p><%= i18n.__('contact_center.chat.confirm_archive') %></p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary rounded-0" data-bs-dismiss="modal">
+						<%= i18n.__('contact_center.chat.close') %>
+					</button>
+					<button type="button" class="btn btn-primary archive-chat-submit rounded-0">
+						<%= i18n.__('contact_center.chat.archive') %>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- MODAL: Delete -->
+	<div class="modal fade" id="modal_delete_chat" tabindex="-1" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content rounded-0">
+				<div class="modal-header">
+					<h1 class="modal-title fs-5"><%= i18n.__('contact_center.chat.delete_chat') %>?</h1>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body">
+					<p><%= i18n.__('contact_center.chat.confirm_delete') %></p>
+					<p><%= i18n.__('contact_center.chat.confirm_delete_note') %></p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary rounded-0" data-bs-dismiss="modal">
+						<%= i18n.__('contact_center.chat.close') %>
+					</button>
+					<button type="button" class="btn btn-primary delete-chat-submit rounded-0">
+						<%= i18n.__('contact_center.chat.delete') %>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- MODAL: Delegate -->
+	<div class="modal fade" id="modal_delegate_chat" tabindex="-1" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content rounded-0">
+				<div class="modal-header">
+					<h1 class="modal-title fs-5"><%= i18n.__('contact_center.chat.delegate_chat') %>?</h1>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body">
+					<div class="mb-3">
+						<label for="managers-list" class="form-label">
+							<%= i18n.__('contact_center.chat.managers_list') %>
+						</label>
+						<select id="managers-list" class="form-select" aria-label="Default select example"></select>
+					</div>
+					<p><%= i18n.__('contact_center.chat.confirm_delegate') %></p>
+					<p><%= i18n.__('contact_center.chat.confirm_delegate_note') %></p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary rounded-0" data-bs-dismiss="modal">
+						<%= i18n.__('contact_center.chat.close') %>
+					</button>
+					<button type="button" class="btn btn-primary delegate-chat-submit rounded-0">
+						<%= i18n.__('contact_center.chat.delegate') %>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<%- include('../../../../partials/footer'); %>
+	<%- include('../../../../partials/script'); %>
+
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.7.2/lightgallery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.7.2/plugins/video/lg-video.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.7.2/plugins/zoom/lg-zoom.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.7.2/plugins/thumbnail/lg-thumbnail.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lightgallery/2.7.2/plugins/fullscreen/lg-fullscreen.min.js"></script>
+
+	<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+		<script>
+			document.addEventListener('DOMContentLoaded', () => {
+				const button = document.getElementById('emoji-btn');
+				const textarea = document.getElementById('exampleFormControlTextarea1');
+
+				if (!button || !textarea) return;
+
+				const picker = document.createElement('emoji-picker');
+
+				// Завжди світла тема
+				picker.setAttribute('theme', 'light');
+
+				// Прибираємо вибір відтінку шкіри
+				picker.setAttribute('skin-tone-emoji', '👍');
+
+				// Розмір
+				picker.style.position = 'fixed';
+				picker.style.zIndex = '9999';
+				picker.style.display = 'none';
+
+				document.body.appendChild(picker);
+
+				button.addEventListener('click', (e) => {
+    e.stopPropagation();
+
+    const rect = button.getBoundingClientRect();
+
+    picker.style.display =
+        picker.style.display === 'none' ? 'block' : 'none';
+
+    if (picker.style.display === 'block') {
+        const pickerWidth = 350;
+        const pickerHeight = 400;
+        const gap = 5;
+
+        // По горизонталі
+        let left = rect.left;
+
+        if (left + pickerWidth > window.innerWidth) {
+            left = window.innerWidth - pickerWidth - 10;
+        }
+
+        if (left < 10) {
+            left = 10;
+        }
+
+        // Спочатку пробуємо показати НАД кнопкою
+        let top = rect.top - pickerHeight - gap;
+
+        // Якщо зверху не вистачає місця — показуємо під кнопкою
+        if (top < 10) {
+            top = rect.bottom + gap;
+        }
+
+        // Якщо і знизу не влазить
+        if (top + pickerHeight > window.innerHeight) {
+            top = window.innerHeight - pickerHeight - 10;
+        }
+
+        picker.style.left = `${left}px`;
+        picker.style.top = `${top}px`;
+    }
+});
+
+				picker.addEventListener('emoji-click', (event) => {
+					const emoji = event.detail.unicode;
+
+					const start = textarea.selectionStart;
+					const end = textarea.selectionEnd;
+
+					textarea.value =
+						textarea.value.substring(0, start) +
+						emoji +
+						textarea.value.substring(end);
+
+					// Повертаємо курсор після emoji
+					const newPosition = start + emoji.length;
+
+					textarea.focus();
+					textarea.setSelectionRange(newPosition, newPosition);
+
+					// Якщо textarea використовується з input/change listeners
+					textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+					picker.style.display = 'none';
+				});
+
+				// Закриття при кліку за межами
+				document.addEventListener('click', (e) => {
+					if (
+						!picker.contains(e.target) &&
+						!button.contains(e.target)
+					) {
+						picker.style.display = 'none';
+					}
+				});
+			});
+	</script>
+
+	<!-- JS-блоки без змін -->
+	<script>
+		$(document).ready(function () {
+			$.ajax({
+				url: "/api/notifications/delete/contact-center/",
+				type: "POST",
+				data: { id_chat: "<%= data_telegram_chat_id %>" },
+				success: function () {},
+				error: function () {},
+			});
+		});
+	</script>
+
+	<script>
+		socket.emit("room", "io_alert_telegram_<%= data_telegram_chat_id %>");
+		socket.on("io_alert_telegram_<%= data_telegram_chat_id %>", function (data) {
+			let newElement;
+			console.log(data);
+			if (data.id_manager == null) {
+				if (data.type_message == "photo") {
+					newElement = $('<div class="message-client mb-4"><img class="img-thumbnail rounded-0" style="max-height:400px;" src="/assets/contact-center/telegram/' + data.chat_id + "/client/" + data.message_id + "/" + data.message + '">');
+					if (data.caption !== null) newElement.append('<span class="d-block">' + data.caption + "</span>");
+					newElement.append('<span class="time m-0">' + data.date + "</span></div>");
+					newElement.find("img").on("load", function () {
+						if ($("#message_list").prop("scrollHeight") - ($("#message_list").scrollTop() + $("#message_list").height()) <= 500)
+							$("#message_list").scrollTop($("#message_list")[0].scrollHeight);
+					});
+				} else if (data.type_message == "sticker") {
+					newElement = $("#message_list").append('<div class="message-client mb-4"><img class="img-thumbnail rounded-0" style="max-height:400px;" src="/assets/contact-center/telegram/clients/' + data.chat_id + "/" + data.message + '"><span class="time m-0">' + data.date + "</span></div>");
+				} else if (data.type_message == "video") {
+					newElement = $("#message_list").append('<div class="message-client mb-4"><video width="100%" height="100%" controls><source src="/assets/contact-center/telegram/clients/' + data.chat_id + "/" + data.message + '" type="video/mp4"></video><span class="time m-0">' + data.date + "</span></div>");
+				} else if (data.type_message == "audio") {
+					newElement = $("#message_list").append('<div class="message-client mb-4"><audio controls><source src="/assets/contact-center/telegram/clients/' + data.chat_id + "/" + data.message + '" type="audio/mpeg"></audio><span class="time m-0">' + data.date + "</span></div>");
+				} else if (data.type_message == "contact") {
+					newElement = $("#message_list").append('<div class="message-client mb-4"><div class="alert alert-light rounded-0 d-inline-block mb-0 p-1">' + data.message + '</div><span class="time m-0">' + data.date + "</span></div>");
+				} else if (data.type_message == "document") {
+					newElement = $("#message_list").append('<div class="message-client mb-4"><img src="/assets/images/file-type/' + data.type_file + '.svg" style="height:50px;"><span class="time m-0">' + data.date + "</span></div>");
+				} else {
+					newElement = $("#message_list").append('<div class="message-client mb-4"><div class="alert alert-light rounded-0 d-inline-block mb-0 p-1">' + data.message + '</div><span class="time m-0">' + data.date + "</span></div>");
+				}
+				if ($("#message_list").prop("scrollHeight") - ($("#message_list").scrollTop() + $("#message_list").height()) <= 500)
+					$("#message_list").scrollTop($("#message_list")[0].scrollHeight);
+			} else {
+				if (data.type_message == "photo") {
+					newElement = $("#message_list").append('<div class="message-manager mb-4"><img class="img-thumbnail rounded-0" style="max-height:400px;" src="/assets/contact-center/telegram/' + data.chat_id + "/manager/" + data.message_id + "/" + data.message + '"><span class="time m-0">' + data.date + "</span></div>");
+					newElement.find("img").on("load", function () {
+						if ($("#message_list").prop("scrollHeight") - ($("#message_list").scrollTop() + $("#message_list").height()) <= 500)
+							$("#message_list").scrollTop($("#message_list")[0].scrollHeight);
+					});
+				} else if (data.type_message == "text") {
+					newElement = $("#message_list").append('<div class="message-manager mb-4"><div class="alert alert-light rounded-0 d-inline-block mb-0 p-1">' + data.message + '</div><span class="time m-0">' + data.date + "</span></div>");
+				} else if (data.type_message == "contact") {
+					newElement = $("#message_list").append('<div class="message-manager mb-4"><div class="alert alert-primary rounded-0 d-inline-block mb-0 p-1">' + data.message + '</div><span class="time m-0">' + data.date + "</span></div>");
+				} else {
+					newElement = $("#message_list").append('<div class="message-manager mb-4"><div class="alert alert-light rounded-0 d-inline-block mb-0 p-1">' + data.message + '</div><span class="time m-0">' + data.date + "</span></div>");
+				}
+				if ($("#message_list").prop("scrollHeight") - ($("#message_list").scrollTop() + $("#message_list").height()) <= 500)
+					$("#message_list").scrollTop($("#message_list")[0].scrollHeight);
+			}
+			const MEDIA_TYPES = ["photo", "video", "document", "file", "audio", "voice", "animation"];
+			if (MEDIA_TYPES.includes(data.type_message)) {
+				mediaData = null;
+				if (currentMediaType) showMediaType(currentMediaType);
+			}
+		});
+	</script>
+
+	<script>
+		$(document).ready(function () {
+			$.ajax({
+				type: "POST",
+				url: "/contact-center/telegram/",
+				data: { chat_id: "<%= data_telegram_chat_id %>" },
+				success: function (response) {
+					$("#message_list").empty();
+					let mediaLoadPromises = [];
+					response.forEach(function (item) {
+						let messageDiv;
+						if (item.id_manager == null) {
+							if (item.type_message == "photo") {
+								messageDiv = $('<div class="message-client mb-4"><img class="img-thumbnail rounded-0" style="max-height:400px;" src="/assets/contact-center/telegram/' + item.chat_id + "/client/" + item.message_id + "/" + item.message + '">');
+								if (item.caption !== null) messageDiv.append('<span class="d-block">' + item.caption + "</span>");
+								messageDiv.append('<span class="time m-0">' + item.formattedDate + "</span></div>");
+							} else if (item.type_message == "video") {
+								messageDiv = $('<div class="message-client mb-4"><video width="100%" height="100%" controls><source src="/assets/contact-center/telegram/clients/' + item.chat_id + "/" + item.message + '" type="video/mp4"></video><span class="time m-0">' + item.formattedDate + "</span></div>");
+							} else if (item.type_message == "audio") {
+								messageDiv = $('<div class="message-client mb-4"><audio controls><source src="/assets/contact-center/telegram/clients/' + item.chat_id + "/" + item.message + '" type="audio/mpeg"></audio><span class="time m-0">' + item.formattedDate + "</span></div>");
+							} else if (item.type_message == "sticker") {
+								messageDiv = $('<div class="message-client mb-4"><img class="img-thumbnail rounded-0" style="max-height:400px;" src="/assets/contact-center/telegram/clients/' + item.chat_id + "/" + item.message + '"><span class="time m-0">' + item.formattedDate + "</span></div>");
+							} else if (item.type_message == "document") {
+								messageDiv = $('<div class="message-client mb-4"><img src="/assets/images/file-type/' + item.type_file + '.svg" style="height:50px;">');
+								if (item.caption !== null) messageDiv.append('<span class="d-block">' + item.caption + "</span>");
+								messageDiv.append('<span class="time m-0">' + item.formattedDate + "</span></div>");
+							} else {
+								messageDiv = $('<div class="message-client mb-4"><div class="alert alert-light rounded-0 d-inline-block mb-0 p-1">' + item.message + '</div><span class="time m-0">' + item.formattedDate + "</span></div>");
+							}
+						} else {
+							if (item.type_message == "file") {
+								messageDiv = $('<div class="message-manager mb-4"><img src="/assets/images/file-type/' + item.type_file + '.svg" style="height:50px;"><span class="time m-0">' + item.formattedDate + "</span></div>");
+							} else {
+								messageDiv = $('<div class="message-manager mb-4"><div class="alert alert-primary rounded-0 d-inline-block mb-0 p-1">' + item.message + '</div><span class="time m-0">' + item.formattedDate + "</span></div>");
+							}
+						}
+						$("#message_list").append(messageDiv);
+						if (item.type_message === "photo" || item.type_message === "sticker") {
+							mediaLoadPromises.push(new Promise((resolve) => messageDiv.find("img").on("load", resolve)));
+						} else if (item.type_message === "video") {
+							mediaLoadPromises.push(new Promise((resolve) => messageDiv.find("video").on("loadeddata", resolve)));
+						}
+					});
+					Promise.all(mediaLoadPromises).then(() => {
+						$("#message_list").scrollTop($("#message_list")[0].scrollHeight);
+					});
+				},
+				error: function (error) { console.error("Помилка при відправці", error); },
+			});
+		});
+	</script>
+
+	<script>
+				$("#submitButton").click(function () {
+			const msg = $("#exampleFormControlTextarea1").val();
+			if (!msg.trim()) return;
+			$.ajax({
+				method: "POST",
+				dataType: "json",
+				data: { message: msg },
+				success: function (data) {
+					$("#message_list").append('<div class="message-manager mb-4"><div class="alert alert-primary rounded-0 d-inline-block mb-0 p-1">' + data.message + '</div><span class="time m-0">' + data.date + "</span></div>");
+					$("#exampleFormControlTextarea1").val("");
+					$("#message_list").scrollTop($("#message_list")[0].scrollHeight);
+				},
+				error: function (xhr) {
+					if (xhr.status === 409) {
+						alert("<%= i18n.__('contact_center.chat.bot_unavailable_send') %>");
+					} else {
+						console.log("form-send error");
+					}
+				},
+			});
+		});
+	</script>
+
+	<script>
+		$(document).ready(function () {
+			$("#formFile").on("change", function () {
+				const file = this.files[0];
+				if (file) {
+					const formData = new FormData();
+					formData.append("file", file);
+					$.ajax({
+						url: "./add-file/",
+						type: "POST",
+						data: formData,
+						contentType: false,
+						processData: false,
+						success: function (r) { console.log("Файл успішно завантажено:", r); },
+						error: function (x, s, e) { console.error("Помилка при завантаженні файлу:", e); },
+					});
+				}
+			});
+		});
+	</script>
+
+	<script>
+		$(document).ready(function () {
+			$("#telegram_commands .dropdown-item").on("click", function (e) {
+				e.preventDefault();
+				const url = $(this).hasClass("request-contact") ? "./requestPhoneNumber/" : "./requestLocation/";
+				$.ajax({
+					type: "POST", url,
+					success: function (r) { console.log(url, r); },
+					error: function (e) { console.error("Помилка при відправці", e); },
+				});
+			});
+		});
+	</script>
+
+	<script>
+		$(document).ready(function () {
+			$(".resolve-chat-submit").on("click", function (e) {
+				e.preventDefault();
+				$.ajax({
+					type: "POST", url: "/api/contact-center/telegram/resolve/",
+					data: { id_chat: "<%= data_telegram_chat_id %>" },
+					success: function () { window.location.href = "/contact-center/"; },
+					error: function (e) { console.error(e); },
+				});
+			});
+		});
+	</script>
+
+	<script>
+		$(document).ready(function () {
+			$(".archive-chat-submit").on("click", function (e) {
+				e.preventDefault();
+				$.ajax({
+					type: "POST", url: "/api/contact-center/telegram/archive/",
+					data: { id_chat: "<%= data_telegram_chat_id %>" },
+					success: function () { window.location.href = "/contact-center/"; },
+					error: function (e) { console.error(e); },
+				});
+			});
+		});
+	</script>
+
+	<script>
+		$(document).ready(function () {
+			$(".delete-chat-submit").on("click", function (e) {
+				e.preventDefault();
+				$.ajax({
+					type: "POST", url: "/api/contact-center/telegram/delete/",
+					data: { id_chat: "<%= data_telegram_chat_id %>" },
+					success: function () { window.location.href = "/contact-center/"; },
+					error: function (e) { console.error(e); },
+				});
+			});
+		});
+	</script>
+
+	<script>
+		$(".btn-take-work").click(function () {
+			$.ajax({
+				url: "/api/contact-center/telegram/manager/assign/",
+				method: "POST", dataType: "json",
+				data: { chat_id: "<%= data_telegram_chat_id %>" },
+				success: function () { location.reload(); },
+				error: function (d) { console.log("assign error", d); },
+			});
+		});
+	</script>
+
+	<script>
+		$(".delegate-chat-submit").click(function () {
+			const id_manager = $("#managers-list").val();
+			if (!id_manager) { console.log("Оберіть менеджера"); return; }
+			$.ajax({
+				url: "/api/contact-center/telegram/manager/delegate/",
+				method: "POST", dataType: "json",
+				data: { chat_id: "<%= data_telegram_chat_id %>", id_manager },
+				success: function () { location.replace("/contact-center/"); },
+				error: function (d) { console.log("delegate error", d); },
+			});
+		});
+	</script>
+
+	<script>
+		$("#modal_delegate_chat").on("show.bs.modal", function () {
+			$.ajax({
+				url: "/api/contact-center/managers/list/",
+				method: "POST", dataType: "json",
+				success: function (data) {
+					const select = $("#managers-list");
+					select.empty();
+					select.append('<option value="">-- <%= i18n.__("orders.columns.edit") %> --</option>');
+					$.each(data, function (i, m) {
+						select.append('<option value="' + m.id + '">' + m.name + "</option>");
+					});
+				},
+				error: function () { console.log("managers list error"); },
+			});
+		});
+	</script>
+
+	<script>
+		const CHAT_ID = "<%= data_telegram_chat_id %>";
+		let mediaData = null;
+		let currentMediaType = null;
+		let lgInstance = null;
+
+		function loadMedia() {
+			if (mediaData) return Promise.resolve(mediaData);
+			return $.ajax({ url: `/api/contact-center/telegram/${CHAT_ID}/media/`, method: "GET" })
+				.then(data => { mediaData = data; return data; });
+		}
+
+		const renderers = {
+			photos(items) {
+				if (!items.length) return emptyHtml();
+				const grid = items.map(item => `
+					<a href="${item.url}" class="col-4 p-1 d-block"
+						${item.caption ? `data-sub-html="<p>${item.caption}</p>"` : ''}>
+						<img src="${item.url}" class="img-fluid w-100"
+							style="height:100px;object-fit:cover;cursor:pointer;" alt="">
+					</a>`).join('');
+				return `<div id="lg-photos" class="row g-0">${grid}</div>`;
+			},
+			videos(items) {
+				if (!items.length) return emptyHtml();
+				const grid = items.map(item => `
+					<a data-video='{"source":[{"src":"${item.url}","type":"video/mp4"}],"attributes":{"preload":false,"controls":true}}'
+						data-poster="" data-lg-size="1280-720"
+						class="col-4 p-1 d-block position-relative" style="cursor:pointer;">
+						<video class="w-100" style="height:100px;object-fit:cover;pointer-events:none;">
+							<source src="${item.url}" type="video/mp4">
+						</video>
+						<span class="position-absolute top-50 start-50 translate-middle"
+							style="font-size:1.5rem;pointer-events:none;">▶</span>
+					</a>`).join('');
+				return `<div id="lg-videos" class="row g-0">${grid}</div>`;
+			},
+			files(items) {
+				if (!items.length) return emptyHtml();
+				return items.map(item => `
+					<div class="d-flex align-items-center p-2 border-bottom">
+						<img src="/assets/images/file-type/${item.ext}.svg"
+							onerror="this.src='/assets/images/file-type/file.svg'"
+							style="height:36px;width:36px;object-fit:contain;" class="me-2">
+						<div class="flex-grow-1 overflow-hidden">
+							<div class="text-truncate small fw-semibold">${item.name}</div>
+							<div class="text-muted" style="font-size:11px;">${item.size || ''} &bull; ${item.date}</div>
+						</div>
+						<a href="${item.url}" download="${item.name}"
+							class="btn btn-sm btn-outline-primary rounded-0 ms-2">
+							<i class="fa-solid fa-download"></i>
+						</a>
+					</div>`).join('');
+			},
+			audio(items) {
+				if (!items.length) return emptyHtml();
+				return items.map(item => `
+					<div class="p-2 border-bottom">
+						<div class="small text-muted mb-1">${item.date}</div>
+						<audio controls class="w-100" style="height:36px;"><source src="${item.url}"></audio>
+					</div>`).join('');
+			},
+			voice(items) {
+				if (!items.length) return emptyHtml();
+				return items.map(item => `
+					<div class="p-2 border-bottom">
+						<div class="small text-muted mb-1">${item.date}</div>
+						<audio controls class="w-100" style="height:36px;"><source src="${item.url}"></audio>
+					</div>`).join('');
+			},
+			gifs(items) {
+				if (!items.length) return emptyHtml();
+				return `<div class="row g-1 p-2">` + items.map(item => `
+					<div class="col-6">
+						<img src="${item.url}" class="img-fluid w-100 rounded-0"
+							style="max-height:150px;object-fit:cover;" alt="GIF">
+						<div class="text-muted text-center" style="font-size:10px;">${item.date}</div>
+					</div>`).join('') + `</div>`;
+			},
+			links(items) {
+				if (!items.length) return emptyHtml();
+				const seen = new Set();
+				return items.filter(i => { if (seen.has(i.url)) return false; seen.add(i.url); return true; })
+					.map(item => `
+						<div class="p-2 border-bottom">
+							<a href="${item.url}" target="_blank" rel="noopener noreferrer"
+								class="text-break small">${item.url}</a>
+							<div class="text-muted" style="font-size:10px;">${item.date}</div>
+						</div>`).join('');
+			},
+		};
+
+		function emptyHtml() {
+			return '<div class="text-center text-muted p-4">Немає файлів</div>';
+		}
+
+		function showMediaType(type) {
+			currentMediaType = type;
+			const $content = $("#media-content");
+			$content.html('<div class="text-center p-3"><div class="spinner-border spinner-border-sm"></div></div>');
+			if (lgInstance) { lgInstance.destroy(); lgInstance = null; }
+			loadMedia().then(data => {
+				const items = data[type] || [];
+				$content.html(renderers[type] ? renderers[type](items) : emptyHtml());
+				if (type === 'photos') {
+					const container = document.getElementById('lg-photos');
+					if (container && items.length) {
+						lgInstance = lightGallery(container, {
+							plugins: [lgZoom, lgThumbnail, lgFullscreen],
+							selector: 'a', speed: 400, thumbnail: true, animateThumb: true,
+							showZoomInOutIcons: true, actualSize: false,
+							mobileSettings: { controls: true, showCloseIcon: true, download: false },
+						});
+					}
+				}
+				if (type === 'videos') {
+					const container = document.getElementById('lg-videos');
+					if (container && items.length) {
+						lgInstance = lightGallery(container, {
+							plugins: [lgVideo, lgFullscreen],
+							selector: 'a', speed: 400,
+							video: { controls: true },
+							mobileSettings: { controls: true, showCloseIcon: true },
+						});
+					}
+				}
+			}).catch(() => {
+				$content.html('<div class="text-center text-danger p-3">Помилка завантаження</div>');
+			});
+		}
+
+		$(document).ready(function () {
+			$("#media-type-tabs").on("click", "button[data-media-type]", function () {
+				$("#media-type-tabs button").removeClass("active");
+				$(this).addClass("active");
+				showMediaType($(this).data("media-type"));
+			});
+			$("#pills-media-tab").on("shown.bs.tab", function () {
+				if (!currentMediaType) showMediaType("photos");
+			});
+		});
+	</script>
+
+</body>
+</html>

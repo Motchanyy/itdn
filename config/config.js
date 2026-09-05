@@ -18,6 +18,7 @@ config.util.setModuleDefaults("configInvite", {
 config.util.setModuleDefaults("configJWT", {
   jwt: {
     jwt_secret: process.env.JWT_SECRET,
+    jwt_refresh_secret: process.env.JWT_REFRESH_SECRET,
     jwt_time_expires: process.env.JWT_EXPIRES || "7d",
     jwt_time_expires_remember: process.env.JWT_EXPIRES_REMEMBER || "30d",
     jwt_cookie_expiring: process.env.JWT_COOKIE_EXPIRING || "90",
@@ -46,7 +47,7 @@ config.util.setModuleDefaults("configMail", {
   from: process.env.MAIL_FROM,
 });
 
-for (const key of ["JWT_SECRET", "TFA_ENC_KEY", "APP_ENCRYPTION_KEY", "WEBCHAT_FILE_SECRET"]) {
+for (const key of ["JWT_SECRET", "JWT_REFRESH_SECRET", "TFA_ENC_KEY", "APP_ENCRYPTION_KEY", "WEBCHAT_FILE_SECRET"]) {
   if (!process.env[key]) throw new Error(`[config] відсутній авто-секрет: ${key}. Запусти: node ensure-env.js`);
 }
 

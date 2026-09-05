@@ -11,7 +11,9 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const db = require("../../config/database/connection_pool");
-const { validateLoginInput } = require("../../validators/authorization/login"); // Новий AJV валідатор
+const config = require("../../config/config");
+const { jwt: jwtCfg } = config.get("configJWT");
+const { validateLoginInput } = require("../../validator/authorization/login"); // Новий AJV валідатор
 
 // Константи безпеки
 const SALT_ROUNDS = 12;
@@ -61,17 +63,18 @@ const logSecurityEvent = async (userId, ip, eventType, details, userAgent) => {
 	}
 };
 
+// Використовуємо ту саму перевірку, що й tfa_settings.js — єдине джерело істини.
+const tfa = require("../../helpers/tfa");
+
 /**
- * Перевірка TOTP коду (Заглушка - потрібна бібліотека otpauth для продакшену)
- * TODO: Встановити npm install otpauth і реалізувати повну перевірку
+ * Перевірка TOTP-коду при вході.
+ * secretStored — зашифрований секрет із БД (поле tfa_secret).
+ * lastStep — значення tfa_last_step користувача (захист від reuse коду).
+ * Повертає { ok, step }.
  */
-const verifyTOTP = (secret, token) => {
-	if (!secret || !token || token.length !== 6) return false;
-	// У реальному проєкті тут має бути:
-	// const OTPAuth = require('otpauth');
-	// const totp = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(secret) });
-	// return totp.validate({ token, window: 1 }) !== null;
-	return true; // Тимчасово для сумісності
+const verifyTOTP = (secretStored, token, lastStep = 0) => {
+	if (!secretStored || !token) return { ok: false };
+	return tfa.verifyTotp(secretStored, tfa.normalizeCode(token), lastStep);
 };
 
 // ---------------------------------------------------------------------
@@ -113,11 +116,19 @@ const authorizationControllers = {
 				if (req.xhr || req.headers.accept.indexOf("json") > -1) {
 					return res.status(400).json({ status: "error", message: "Invalid input data" });
 				}
-				// Для форми
+
+				// Рендер форми з полем 2FA.
+				// Пароль НІКОЛИ не повертаємо клієнту. Факт проходження першого
+				// фактора зберігаємо в захищеній серверній сесії (див. Правку 4).
+				req.session = req.session || {};
+				req.session.pending_tfa = {
+					userId: fullUser.id,
+					createdAt: Date.now(),
+				};
 				return res.render("pages/administrator/authorization/login/login", {
-					error: "Некоректні дані форми",
-					email: req.body.email || "",
-					status: null,
+					status: "tfa_required",
+					email: normalizedEmail,
+					error: null,
 				});
 			}
 
@@ -239,11 +250,15 @@ const authorizationControllers = {
 
 					// Якщо це AJAX запит - повертаємо статус для фронтенду
 					if (req.xhr || req.headers.accept.indexOf("json") > -1) {
-						return res.status(403).json({
-							status: "2fa_required",
+						req.session = req.session || {};
+						req.session.pending_tfa = {
+							userId: fullUser.id,
+							createdAt: Date.now(),
+						};
+						return res.status(200).json({
+							status: "tfa_required",
 							message: "Потрібен код 2FA",
 							email: normalizedEmail,
-							// Увага: ніколи не передавайте пароль назад у відповіді!
 						});
 					}
 
@@ -318,8 +333,8 @@ const authorizationControllers = {
 				iat: Math.floor(Date.now() / 1000),
 			};
 
-			const accessToken = jwt.sign(accessTokenPayload, process.env.JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-			const refreshToken = jwt.sign(refreshTokenPayload, process.env.JWT_REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES_IN });
+			const accessToken = jwt.sign(accessTokenPayload, jwtCfg.jwt_secret, { expiresIn: JWT_EXPIRES_IN });
+			const refreshToken = jwt.sign(refreshTokenPayload, jwtCfg.jwt_refresh_secret, { expiresIn: REFRESH_EXPIRES_IN });
 
 			// КРОК 12: Встановлення безпечних Cookie
 			const cookieOptions = {
@@ -418,16 +433,21 @@ const authorizationControllers = {
 			if (!email) return res.status(400).json({ status: "error", message: "Email обов'язковий" });
 
 			const token = crypto.randomBytes(32).toString("hex");
+			const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 			const expires = new Date(Date.now() + 3600000); // 1 година
 
+			// У БД зберігаємо лише ХЕШ. Витік БД не дасть валідних токенів скидання.
 			await db.execute(
 				`
 					UPDATE ${DB_PREFIX}users 
 					SET reset_token = ?, reset_token_expires = ? 
 					WHERE email = ?
 				`,
-				[token, expires, email]
+				[tokenHash, expires, email]
 			);
+
+			// У листі надсилаємо СИРИЙ token (не хеш):
+			// await sendEmail(email, `.../reset?token=${token}`);
 
 			// Тут має бути відправка email з посиланням
 			// await sendEmail(...)
@@ -451,12 +471,18 @@ const authorizationControllers = {
 			const { token, password } = req.body;
 			if (!token || !password) return res.status(400).json({ status: "error", message: "Всі поля обов'язкові" });
 
+			// Мінімальна перевірка складності (AJV login-схема вимагає 8+; тримаємо консистентно).
+			if (typeof password !== "string" || password.length < 8 || password.length > 128) {
+				return res.status(400).json({ status: "error", message: "Пароль має містити від 8 до 128 символів" });
+			}
+
+			const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
 			const [users] = await db.execute(
 				`
 					SELECT id FROM ${DB_PREFIX}users 
 					WHERE reset_token = ? AND reset_token_expires > NOW()
 				`,
-				[token]
+				[tokenHash]
 			);
 
 			if (users.length === 0) {
@@ -494,7 +520,7 @@ const authorizationControllers = {
 		if (!token) return res.status(401).json({ status: "error", message: "Unauthorized" });
 
 		try {
-			const decoded = jwt.verify(token, process.env.JWT_SECRET);
+			const decoded = jwt.verify(token, jwtCfg.jwt_secret);
 			req.user = decoded;
 			next();
 		} catch (err) {

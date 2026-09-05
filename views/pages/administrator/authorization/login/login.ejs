@@ -249,9 +249,11 @@
 
 					$.ajax({
 						type: "POST",
-						url: "/login/tfa/",
+						url: "/login/",
 						data: {
-							code: $code.val(),
+							email: $("#authorization_form input[name='email']").val(),
+							password: $("#authorization_form input[name='password']").val(),
+							two_factor_code: $code.val(),
 							backup: $("#tfa_backup").val(),
 						},
 						dataType: "json",

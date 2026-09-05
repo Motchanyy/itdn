@@ -21,17 +21,25 @@ const tfaSettingsControllers = require("../../../../controllers/authorization/tf
 // ЗАХИСТ ВІД BRUTE-FORCE (RATE LIMITING)
 // ---------------------------------------------------------------------
 
-/**
- * Лімітер для спроб входу (Login)
- * 5 спроб на 15 хвилин з одного IP або Email
- */
-const loginLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 хвилин
-	max: 5, // максимум 5 запитів
+// Ліміт за IP — стеля незалежно від того, скільки email перебирає атакувальник.
+const loginLimiterByIp = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 20,
 	message: { status: "error", message: "Too many login attempts, please try again later." },
 	standardHeaders: true,
 	legacyHeaders: false,
-	keyGenerator: (req) => req.body.email || req.ip,
+	keyGenerator: (req) => req.ip,
+});
+
+// Ліміт за акаунтом — окремо захищає конкретний email від націленого підбору.
+const loginLimiterByAccount = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 5,
+	message: { status: "error", message: "Too many login attempts, please try again later." },
+	standardHeaders: true,
+	legacyHeaders: false,
+	keyGenerator: (req) => (req.body.email ? String(req.body.email).toLowerCase().trim() : req.ip),
+	skip: (req) => !req.body.email,
 });
 
 /**
@@ -76,7 +84,7 @@ router.get("/", (req, res) => {
  * POST /administrator/login
  * Обробка форми входу (з захищеним контролером)
  */
-router.post("/", loginLimiter, authorizationControllers.login);
+router.post("/", loginLimiterByIp, loginLimiterByAccount, authorizationControllers.login);
 
 // ---------------------------------------------------------------------
 // ВИХІД (LOGOUT)

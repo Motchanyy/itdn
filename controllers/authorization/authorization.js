@@ -15,13 +15,18 @@ const config = require("../../config/config");
 const { jwt: jwtCfg } = config.get("configJWT");
 const { validateLoginInput } = require("../../validator/authorization/login"); // Новий AJV валідатор
 
+// ─── Конфігурація ────────────────────────────────────────────────────────────
+const config = require("../../config/config");
+const configDatabase = config.get("configDatabase");
+const prefix = configDatabase.prefix;
+// ─── Конфігурація ────────────────────────────────────────────────────────────
+
 // Константи безпеки
 const SALT_ROUNDS = 12;
 const LOCKOUT_THRESHOLD = 5;
 const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 хвилин блокування
 const JWT_EXPIRES_IN = "24h";
 const REFRESH_EXPIRES_IN = "90d";
-const DB_PREFIX = "8ydnb966_";
 
 // ---------------------------------------------------------------------
 // ДОПОМІЖНІ ФУНКЦІЇ БЕЗПЕКИ
@@ -52,7 +57,7 @@ const logSecurityEvent = async (userId, ip, eventType, details, userAgent) => {
 	try {
 		await db.execute(
 			`
-      INSERT INTO ${DB_PREFIX}users_security_events 
+      INSERT INTO ${prefix}users_security_events 
       (id_user, ip_address, event_type, user_agent, details, created_at)
       VALUES (?, ?, ?, ?, ?, NOW())
     `,
@@ -106,6 +111,7 @@ const authorizationControllers = {
 		const deviceFingerprint = getDeviceFingerprint(req);
 
 		let connection;
+		let tfaStepUsed = null; // крок TOTP для anti-replay; лишається null при вході без TOTP
 
 		try {
 			// КРОК 1: Валідація вхідних даних через AJV
@@ -135,7 +141,7 @@ const authorizationControllers = {
 			const [lockRows] = await connection.execute(
 				`
 					SELECT id, failed_login_attempts, locked_until, active 
-					FROM ${DB_PREFIX}users 
+					FROM ${prefix}users 
 					WHERE email = ? 
 					FOR UPDATE
 				`,
@@ -198,7 +204,7 @@ const authorizationControllers = {
 			const [userRows] = await connection.execute(
 				`
 					SELECT id, email, password, first_name, last_name, role, tfa_enabled, tfa_secret, tfa_last_step, token_version
-					FROM ${DB_PREFIX}users 
+					FROM ${prefix}users 
 					WHERE id = ?
 				`,
 				[user.id]
@@ -215,7 +221,7 @@ const authorizationControllers = {
 
 				await connection.execute(
 					`
-					UPDATE ${DB_PREFIX}users 
+					UPDATE ${prefix}users 
 					SET failed_login_attempts = ?, locked_until = ?, date_edit = NOW()
 					WHERE id = ?
 					`,
@@ -272,7 +278,7 @@ const authorizationControllers = {
 					if (tfa.isValidBackupFormat(rawBackup)) {
 						const codeHash = tfa.hashBackupCode(rawBackup);
 						const [bRows] = await connection.execute(
-							`SELECT id FROM ${DB_PREFIX}users_tfa_backup_codes
+							`SELECT id FROM ${prefix}users_tfa_backup_codes
 							 WHERE id_user = ? AND code_hash = ? AND used_at IS NULL
 							 LIMIT 1 FOR UPDATE`,
 							[fullUser.id, codeHash]
@@ -280,7 +286,7 @@ const authorizationControllers = {
 						if (bRows.length > 0) {
 							tfaOk = true;
 							// Гасимо використаний код у цій же транзакції
-							await connection.execute(`UPDATE ${DB_PREFIX}users_tfa_backup_codes SET used_at = NOW() WHERE id = ?`, [bRows[0].id]);
+							await connection.execute(`UPDATE ${prefix}users_tfa_backup_codes SET used_at = NOW() WHERE id = ?`, [bRows[0].id]);
 						}
 					}
 				} else {
@@ -310,7 +316,7 @@ const authorizationControllers = {
 			// tfaStepUsed фіксуємо тільки якщо вхід був за TOTP (не backup) — anti-replay.
 			await connection.execute(
 				`
-					UPDATE ${DB_PREFIX}users 
+					UPDATE ${prefix}users 
 					SET failed_login_attempts = 0, locked_until = NULL,
 						last_login_ip = ?, date_last_login = NOW(),
 						tfa_last_step = ${tfaStepUsed !== null ? "GREATEST(tfa_last_step, ?)" : "tfa_last_step"},
@@ -324,7 +330,7 @@ const authorizationControllers = {
 			const expiresAt = remember_me ? "DATE_ADD(NOW(), INTERVAL 30 DAY)" : "DATE_ADD(NOW(), INTERVAL 24 HOUR)";
 			await connection.execute(
 				`
-					INSERT INTO ${DB_PREFIX}users_sessions 
+					INSERT INTO ${prefix}users_sessions 
 					(id_user, ip_address, user_agent, device_fingerprint, created_at, expires_at, is_valid)
 					VALUES (?, ?, ?, ?, NOW(), ${expiresAt}, 1)
 					ON DUPLICATE KEY UPDATE last_activity = NOW(), ip_address = VALUES(ip_address), is_valid = 1
@@ -421,7 +427,7 @@ const authorizationControllers = {
 			const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
 			// Перевірка наявності email
-			const [existing] = await db.execute(`SELECT id FROM ${DB_PREFIX}users WHERE email = ?`, [email]);
+			const [existing] = await db.execute(`SELECT id FROM ${prefix}users WHERE email = ?`, [email]);
 			if (existing.length > 0) {
 				return res.status(400).json({ status: "error", message: "Email вже зайнятий" });
 			}
@@ -429,7 +435,7 @@ const authorizationControllers = {
 			// Створення користувача
 			await db.execute(
 				`
-					INSERT INTO ${DB_PREFIX}users (email, password, first_name, last_name, active, date_add, date_edit)
+					INSERT INTO ${prefix}users (email, password, first_name, last_name, active, date_add, date_edit)
 					VALUES (?, ?, ?, ?, 1, NOW(), NOW())
 				`,
 				[email, hashedPassword, first_name, last_name]
@@ -460,7 +466,7 @@ const authorizationControllers = {
 			// У БД зберігаємо лише ХЕШ. Витік БД не дасть валідних токенів скидання.
 			await db.execute(
 				`
-					UPDATE ${DB_PREFIX}users 
+					UPDATE ${prefix}users 
 					SET reset_token = ?, reset_token_expires = ? 
 					WHERE email = ?
 				`,
@@ -500,7 +506,7 @@ const authorizationControllers = {
 			const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
 			const [users] = await db.execute(
 				`
-					SELECT id FROM ${DB_PREFIX}users 
+					SELECT id FROM ${prefix}users 
 					WHERE reset_token = ? AND reset_token_expires > NOW()
 				`,
 				[tokenHash]
@@ -513,7 +519,7 @@ const authorizationControllers = {
 			const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 			await db.execute(
 				`
-					UPDATE ${DB_PREFIX}users 
+					UPDATE ${prefix}users 
 					SET password = ?, reset_token = NULL, reset_token_expires = NULL, date_edit = NOW()
 					WHERE id = ?
 				`,

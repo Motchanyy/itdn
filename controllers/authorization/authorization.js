@@ -5,10 +5,6 @@ const bcryptjs = require("bcryptjs");
 const { promisify } = require("util");
 const validator = require("validator");
 const rateLimit = require("express-rate-limit");
-const crypto = require("crypto");
-
-// ─── Валідація AJV ───────────────────────────────────────────────────────────
-const validateLogin = require("../../validators/authorization/login");
 
 // ─── Конфігурація ────────────────────────────────────────────────────────────
 const config = require("../../config/config");
@@ -23,6 +19,7 @@ const connection_pool = require("../../config/database/connection_pool");
 
 // ─── 2FA ─────────────────────────────────────────────────────────────────────
 const tfa = require("../../helpers/tfa");
+const crypto = require("crypto");
 
 // ─── Кеш ─────────────────────────────────────────────────────────────────────
 const NodeCache = require("node-cache");
@@ -41,54 +38,42 @@ const TFA_MAX_ATTEMPTS = 5;
 const TFA_LOCK_MIN = 15;
 const TFA_CHALLENGE_TTL_SEC = 300; // 5 хв на введення коду
 
-// ─── Rate limiters (ПОСИЛЕНІ) ────────────────────────────────────────────────
-// Глобальне обмеження по IP для запобігання brute-force атакам
+// ─── Rate limiters ───────────────────────────────────────────────────────────
+// Лічильники в БД прив'язані до юзера. Це не рятує від атаки
+// "один код проти тисячі акаунтів" — тому додатково ріжемо по IP.
 
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 хвилин
-  max: 5, // Тільки 5 спроб на IP
+  windowMs: 15 * 60 * 1000,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => getClientIp(req),
   handler: (req, res) =>
     res.status(429).json({
       status: "rate_limited",
       errors: [{ field: "rate", minutes: 15 }],
     }),
-  skipSuccessfulRequests: false, // Рахувати навіть успішні запити
-  message: "Занадто багато спроб входу, будь ласка, спробуйте пізніше",
 });
 
 const tfaLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 хвилин
-  max: 3, // Тільки 3 спроби 2FA на IP
+  windowMs: 15 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => getClientIp(req),
   handler: (req, res) =>
     res.status(429).json({
       status: "rate_limited",
       errors: [{ field: "rate", minutes: 15 }],
     }),
-  skipSuccessfulRequests: false,
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/**
- * Отримання IP адреси клієнта з урахуванням проксі
- * Обрізаємо до 45 символів для IPv6
- */
 function getClientIp(req) {
   const forwarded = req.headers["x-forwarded-for"];
   const ip = forwarded ? forwarded.split(",")[0].trim() : req.socket?.remoteAddress || "";
   return ip.substring(0, 45);
 }
 
-/**
- * Визначення типу пристрою за User-Agent
- * 0 = Desktop, 1 = Mobile, 2 = Tablet
- */
 function detectDevice(userAgent = "") {
   const ua = userAgent.toLowerCase();
   if (/tablet|ipad|playbook|silk/.test(ua)) return 2;
@@ -96,9 +81,6 @@ function detectDevice(userAgent = "") {
   return 0;
 }
 
-/**
- * Запис логіну в БД з розширеною інформацією
- */
 function writeLoginLog(userId, req, success) {
   const ip = getClientIp(req);
   const userAgent = (req.headers["user-agent"] || "").substring(0, 512);
@@ -112,25 +94,6 @@ function writeLoginLog(userId, req, success) {
       [userId, ip, userAgent, device, success ? 1 : 0]
     )
     .catch((err) => logging.error("[writeLoginLog]", err));
-}
-
-/**
- * Логування подій безпеки (підозріла активність, зміна IP тощо)
- */
-async function logSecurityEvent(userId, eventType, req, extraData = {}) {
-  const ip = getClientIp(req);
-  const userAgent = (req.headers["user-agent"] || "").substring(0, 512);
-  
-  try {
-    await connection_pool.query(
-      `INSERT INTO \`${DB_PREFIX}users_security_events\`
-             (id_user, event_type, ip, user_agent, extra_data)
-             VALUES (?, ?, ?, ?, ?)`,
-      [userId, eventType, ip, userAgent, JSON.stringify(extraData)]
-    );
-  } catch (err) {
-    logging.error("[logSecurityEvent]", err);
-  }
 }
 
 async function loadUserPermissions(userId) {
@@ -208,8 +171,7 @@ function setTfaChallengeCookie(res, token) {
     maxAge: TFA_CHALLENGE_TTL_SEC * 1000,
     httpOnly: true,
     secure: isProd,
-    sameSite: "strict", // ПОСИЛЕНО: strict для захисту від CSRF
-    path: "/"
+    sameSite: "lax",
   });
 }
 
@@ -228,8 +190,7 @@ function issueLoginCookie(res, user, remember_me) {
     expires: new Date(Date.now() + Number(jwtConfig.jwt.jwt_cookie_expiring) * 24 * 60 * 60 * 1000),
     httpOnly: true,
     secure: isProd,
-    sameSite: "strict", // ПОСИЛЕНО: strict для захисту від CSRF
-    path: "/"
+    sameSite: "lax",
   });
 }
 
@@ -289,189 +250,119 @@ exports.register = async (req, res) => {
   }
 };
 
-// ─── Login (МАКСИМАЛЬНИЙ ЗАХИСТ) ─────────────────────────────────────────────
+// ─── Login ───────────────────────────────────────────────────────────────────
 
 exports.login = async (req, res) => {
   try {
-    // КРОК 1: Валідація вхідних даних через AJV
-    const validationErrors = validateLogin(req.body);
-    
-    if (validationErrors) {
-      // Форматуємо помилки AJV у зручний вигляд
-      const errors = validationErrors.map(err => {
-        let field = err.instancePath.substring(1) || "data";
-        let msg = res.__("please_fill_out_this_field");
-        
-        if (err.keyword === "format" && err.params.format === "email") {
-          msg = res.__("invalid_email_format");
-        } else if (err.keyword === "minLength" && err.params.missingProperty) {
-          msg = res.__("field_required");
-        } else if (err.keyword === "pattern") {
-          if (err.instancePath.includes("email")) {
-            msg = res.__("invalid_email_format");
-          } else if (err.instancePath.includes("tfa_code")) {
-            msg = res.__("invalid_2fa_code_format");
-          }
-        } else if (err.keyword === "additionalProperties") {
-          msg = res.__("unexpected_field");
-        }
-        
-        return { field, msg };
-      });
-      
-      logging.warn(`[login] Validation failed from IP ${getClientIp(req)}`, { 
-        errors: validationErrors,
-        body: req.body 
-      });
-      
+    const email = (req.body.email || "").trim().toLowerCase();
+    const password = (req.body.password || "").trim();
+    const remember_me = req.body.remember_me === true || req.body.remember_me === "true";
+
+    const errors = [];
+
+    if (!email || !validator.isEmail(email)) {
+      errors.push({ field: "email", msg: res.__("please_fill_out_this_field") });
+    }
+    if (!password || validator.isEmpty(password)) {
+      errors.push({ field: "password", msg: res.__("please_fill_out_this_field") });
+    }
+
+    if (errors.length > 0) {
       return res.status(422).json({ status: "error", errors });
     }
-    
-    // КРОК 2: Санітизація даних (додатковий захист)
-    const email = req.body.email.trim().toLowerCase();
-    const password = req.body.password.trim();
-    const remember_me = req.body.remember_me === true;
-    const tfa_code = req.body.tfa_code?.trim();
-    
-    // КРОК 3: Перевірка на наявність користувача
+
     const [[user]] = await connection_pool.query(
       `SELECT id, email, password, active,
                     failed_login_attempts, locked_until,
-                    tfa_enabled, tfa_secret, token_version,
-                    last_login_ip, last_device_type
+                    tfa_enabled, tfa_secret, token_version
              FROM \`${DB_PREFIX}users\`
              WHERE email = ? LIMIT 1`,
       [email]
     );
 
-    // Універсальна відповідь для запобігання enumeration attacks
-    const genericAuthError = () => res.status(401).json({
-      status: "invalid",
-      errors: [{ field: "invalid" }],
-    });
-
     if (!user) {
-      logging.info(`[login] Failed login attempt for non-existent user: ${email} from IP ${getClientIp(req)}`);
-      return genericAuthError();
+      return res.status(401).json({
+        status: "invalid",
+        errors: [{ field: "invalid" }],
+      });
     }
 
-    // КРОК 4: Перевірка блокування акаунту
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
       const minutesLeft = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
-      logging.warn(`[login] Account locked: ${user.id} from IP ${getClientIp(req)}, locked until: ${user.locked_until}`);
-      
       return res.status(429).json({
         status: "locked",
         errors: [{ field: "locked", minutes: minutesLeft }],
       });
     }
 
-    // КРОК 5: Перевірка паролю з constant-time comparison
-    let passwordMatch;
-    try {
-      passwordMatch = await bcryptjs.compare(password, user.password);
-    } catch (err) {
-      logging.error("[login] bcrypt compare error", err);
-      return res.status(500).json({ status: "error" });
-    }
+    const passwordMatch = await bcryptjs.compare(password, user.password);
 
     if (!passwordMatch) {
-      // Збільшуємо лічильник невдалих спроб
       const newAttempts = (user.failed_login_attempts || 0) + 1;
-      const shouldLock = newAttempts >= MAX_FAILED_ATTEMPTS;
-      const lockedUntil = shouldLock 
-        ? new Date(Date.now() + LOCK_DURATION_MIN * 60 * 1000) 
-        : null;
+      const lockedUntil = newAttempts >= MAX_FAILED_ATTEMPTS ? new Date(Date.now() + LOCK_DURATION_MIN * 60 * 1000) : null;
 
-      await connection_pool.query(
-        `UPDATE \`${DB_PREFIX}users\`
-         SET failed_login_attempts = ?, locked_until = ?
-         WHERE id = ?`,
-        [newAttempts, lockedUntil, user.id]
-      );
+      connection_pool
+        .query(
+          `UPDATE \`${DB_PREFIX}users\`
+                     SET failed_login_attempts = ?,
+                         locked_until          = ?
+                     WHERE id = ?`,
+          [newAttempts, lockedUntil, user.id]
+        )
+        .catch((err) => logging.error("[login] update failed_attempts", err));
 
       writeLoginLog(user.id, req, false);
-      
-      // Логуємо підозрілу активність після кількох невдалих спроб
-      if (newAttempts >= 3) {
-        await logSecurityEvent(user.id, "login_failed_multiple", req, {
-          attempts: newAttempts,
-          email: email
-        });
-      }
 
-      logging.warn(`[login] Invalid password for user ${user.id}, attempt ${newAttempts}, IP: ${getClientIp(req)}`);
-      
-      return genericAuthError();
+      return res.status(401).json({
+        status: "invalid",
+        errors: [{ field: "invalid" }],
+      });
     }
 
-    // КРОК 6: Перевірка активності акаунту
     if (user.active !== 1) {
-      logging.warn(`[login] Inactive account tried to login: ${user.id}, IP: ${getClientIp(req)}`);
       return res.status(403).json({
         status: "invalid",
         errors: [{ field: "account_not_active" }],
       });
     }
 
-    // КРОК 7: Скидання лічильника невдалих спроб після успішної перевірки паролю
-    await connection_pool.query(
-      `UPDATE \`${DB_PREFIX}users\`
-       SET failed_login_attempts = 0, locked_until = NULL
-       WHERE id = ?`,
-      [user.id]
-    );
+    // Скидаємо лічильник невдалих спроб ПАРОЛЯ
+    connection_pool
+      .query(
+        `UPDATE \`${DB_PREFIX}users\`
+                 SET failed_login_attempts = 0,
+                     locked_until          = NULL
+                 WHERE id = ?`,
+        [user.id]
+      )
+      .catch((err) => logging.error("[login] reset failed_attempts", err));
 
-    // КРОК 8: Перевірка на новий пристрій/IP (підозріла активність)
-    const currentIp = getClientIp(req);
-    const currentDevice = detectDevice(req.headers["user-agent"] || "");
-    
-    const isNewDevice = user.last_device_type !== currentDevice;
-    const isNewIp = user.last_login_ip !== currentIp;
-    
-    if (isNewDevice || isNewIp) {
-      await logSecurityEvent(user.id, "login_new_device_or_ip", req, {
-        current_ip: currentIp,
-        previous_ip: user.last_login_ip,
-        current_device: currentDevice,
-        previous_device: user.last_device_type,
-        is_new_device: isNewDevice,
-        is_new_ip: isNewIp
-      });
-      
-      logging.info(`[login] New device/IP detected for user ${user.id}: IP=${currentIp}, Device=${currentDevice}`);
-    }
-
-    // КРОК 9: 2FA перевірка
+    // ── 2FA увімкнена → не пускаємо, віддаємо challenge ──────────────────
     if (user.tfa_enabled === 1 && user.tfa_secret) {
       const challenge = signTfaChallenge(user.id, user.token_version, remember_me);
       setTfaChallengeCookie(res, challenge);
 
-      logging.info(`[login] 2FA required for user ${user.id}, IP: ${currentIp}`);
       return res.json({ status: "tfa_required" });
     }
 
-    // КРОК 10: Успішний логін - оновлення останнього входу
-    await connection_pool.query(
-      `UPDATE \`${DB_PREFIX}users\`
-       SET date_last_login = NOW(),
-           last_login_ip = ?,
-           last_device_type = ?
-       WHERE id = ?`,
-      [currentIp, currentDevice, user.id]
-    );
+    // ── 2FA вимкнена → звичайний вхід ────────────────────────────────────
+    connection_pool
+      .query(
+        `UPDATE \`${DB_PREFIX}users\`
+                 SET date_last_login = NOW()
+                 WHERE id = ?`,
+        [user.id]
+      )
+      .catch((err) => logging.error("[login] update last_login", err));
 
     writeLoginLog(user.id, req, true);
     invalidateUserCache(user.id);
 
     issueLoginCookie(res, user, remember_me);
 
-    logging.info(`[login] Successful login for user ${user.id}, IP: ${currentIp}, Device: ${currentDevice}`);
-
     return res.json({ status: "success", url: "/" });
-    
   } catch (error) {
-    logging.error("[login] Critical error", error);
+    logging.error("[login]", error);
     return res.status(500).json({ status: "error" });
   }
 };

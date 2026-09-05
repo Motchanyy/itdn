@@ -25,10 +25,8 @@ const compression = require("compression");
 const cors = require("cors");
 const cron = require("node-cron");
 
-// Опціональні middleware (закоментовані, але залишені для можливого використання)
-// const minify = require("html-minifier").minify;
-// const helmet = require("helmet");
-// const rateLimit = require("express-rate-limit");
+const helmet = require("helmet");
+const session = require("express-session");
 
 // Внутрішні модулі
 const i18n = require("./config/i18n/i18n");
@@ -36,6 +34,14 @@ const loadLanguages = require("./middlewares/languages");
 
 // ─── ІНІЦІАЛІЗАЦІЯ EXPRESS ДОДАТКУ ────────────────────
 const app = express();
+
+// Довіряємо ЛИШЕ довіреному проксі (Nginx/Cloudflare перед додатком).
+// Число = кількість проксі-хопів. Тоді req.ip коректний, а x-forwarded-for
+// від клієнта не підробляється. Підберіть під вашу інфраструктуру.
+app.set("trust proxy", 1);
+
+// Захисні HTTP-заголовки (CSP, HSTS, X-Frame-Options тощо).
+app.use(helmet());
 
 // ─── СТВОРЕННЯ HTTP СЕРВЕРА ───────────────────────────
 const server = http.createServer(app);
@@ -81,8 +87,39 @@ app.use("/assets", express.static(assetsPath));
 // ─── COOKIES ТА CORS ─────────────────────────────────
 // Парсинг cookies з запитів
 app.use(cookieParser());
-// Дозвіл CORS для всіх запитів
-app.use(cors());
+
+// CORS лише для довірених доменів + підтримка кукі.
+// Впишіть реальні домени вашої CRM у CORS_ORIGINS через кому.
+const allowedOrigins = (process.env.CORS_ORIGINS || "")
+	.split(",")
+	.map((s) => s.trim())
+	.filter(Boolean);
+app.use(
+	cors({
+		origin: (origin, cb) => {
+			if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+			return cb(new Error("Not allowed by CORS"));
+		},
+		credentials: true,
+	})
+);
+
+// Серверні сесії — потрібні для зберігання факту проходження 1-го фактора
+// (щоб не тягати пароль через форму). У проді підключіть store (Redis), не MemoryStore.
+app.use(
+	session({
+		secret: process.env.SESSION_SECRET,
+		name: "sid",
+		resave: false,
+		saveUninitialized: false,
+		cookie: {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === "production",
+			sameSite: "strict",
+			maxAge: 10 * 60 * 1000, // pending-2FA живе недовго
+		},
+	})
+);
 
 // ─── НАЛАШТУВАННЯ ШАБЛОНІЗАТОРА ──────────────────────
 // Використовуємо EJS як шаблонізатор

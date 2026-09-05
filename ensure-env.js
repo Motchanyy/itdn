@@ -6,7 +6,8 @@ const ENV_PATH = path.join(__dirname, ".env");
 
 // Генеруються самі — користувач не чіпає
 const AUTO = {
-  JWT_SECRET: { gen: () => crypto.randomBytes(64).toString("hex"), comment: "Підпис JWT. Зміна = розлогінення всіх. НЕ ЧІПАТИ." },
+  JWT_SECRET: { gen: () => crypto.randomBytes(64).toString("hex"), comment: "Підпис access-JWT. Зміна = розлогінення всіх. НЕ ЧІПАТИ." },
+  JWT_REFRESH_SECRET: { gen: () => crypto.randomBytes(64).toString("hex"), comment: "Підпис refresh-JWT. Окремий від access. НЕ ЧІПАТИ." },
   TFA_ENC_KEY: { gen: () => crypto.randomBytes(32).toString("hex"), comment: "Шифрування 2FA у БД. Зміна = 2FA всіх злетить. НЕ ЧІПАТИ." },
   APP_ENCRYPTION_KEY: { gen: () => crypto.randomBytes(32).toString("hex"), comment: "Шифрування токенів інтеграцій у БД. НЕ ЧІПАТИ." },
   WEBCHAT_FILE_SECRET: { gen: () => crypto.randomBytes(48).toString("hex"), comment: "Підпис посилань на файли веб-чату. НЕ ЧІПАТИ." },

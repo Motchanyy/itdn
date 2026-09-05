@@ -6,78 +6,81 @@
  * ===================================================================
  */
 
-const Ajv = require('ajv').default;
-const addFormats = require('ajv-formats');
+const Ajv = require("ajv").default;
+const addFormats = require("ajv-formats");
 
 const ajv = new Ajv({
-  allErrors: true,
-  strict: true,
-  coerceTypes: false, // Не приводити типи автоматично
-  removeAdditional: false // Не видаляти додаткові поля (ми їх відхиляємо)
+	allErrors: true,
+	strict: true,
+	coerceTypes: false, // Не приводити типи автоматично
+	removeAdditional: false, // Не видаляти додаткові поля (ми їх відхиляємо)
 });
 
 addFormats(ajv);
 
 const loginSchema = {
-  type: 'object',
-  required: ['email', 'password'],
-  additionalProperties: false, // Заборона будь-яких зайвих полів
-  properties: {
-    email: {
-      type: 'string',
-      format: 'email',
-      minLength: 6,
-      maxLength: 255,
-      pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
-    },
-    password: {
-      type: 'string',
-      minLength: 8,
-      maxLength: 128
-      // Додатково можна додати pattern для складності пароля
-    },
-    two_factor_code: {
-      type: 'string',
-      nullable: true,
-      pattern: '^\\d{6}$',
-      minLength: 6,
-      maxLength: 6
-    },
-    remember_me: {
-      type: 'boolean',
-      default: false
-    }
-  }
+	type: "object",
+	required: ["email", "password"],
+	additionalProperties: false, // Заборона будь-яких зайвих полів
+	properties: {
+		email: {
+			type: "string",
+			format: "email",
+			minLength: 6,
+			maxLength: 255,
+			pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+		},
+		password: {
+			type: "string",
+			minLength: 8,
+			maxLength: 128,
+			// Додатково можна додати pattern для складності пароля
+		},
+		two_factor_code: {
+			type: "string",
+			nullable: true,
+			// 6 цифр (TOTP) АБО 10 символів A-Z0-9 (backup-код)
+			pattern: "^(\\d{6}|[A-Za-z0-9]{10})$",
+			minLength: 6,
+			maxLength: 10,
+		},
+		remember_me: {
+			type: "boolean",
+			default: false,
+		},
+		backup: {
+			type: ["string", "boolean"],
+			nullable: true,
+		},
+	},
 };
 
 const validateLogin = ajv.compile(loginSchema);
 
 function validateLoginInput(data) {
-  if (!data || typeof data !== 'object') {
-    return { 
-      valid: false, 
-      errors: [{ field: 'body', message: 'Request body must be a valid JSON object' }] 
-    };
-  }
+	if (!data || typeof data !== "object") {
+		return {
+			valid: false,
+			errors: [{ field: "body", message: "Request body must be a valid JSON object" }],
+		};
+	}
 
-  const valid = validateLogin(data);
+	const valid = validateLogin(data);
 
-  if (!valid) {
-    const formattedErrors = validateLogin.errors.map(err => ({
-      field: err.instancePath.substring(1) || 'root',
-      message: err.message === 'must NOT have additional properties' 
-        ? 'Unknown field provided' 
-        : err.message,
-      keyword: err.keyword
-    }));
-    return { valid: false, errors: formattedErrors };
-  }
+	if (!valid) {
+		const formattedErrors = validateLogin.errors.map((err) => ({
+			field: err.instancePath.substring(1) || "root",
+			message: err.message === "must NOT have additional properties" ? "Unknown field provided" : err.message,
+			keyword: err.keyword,
+		}));
+		return { valid: false, errors: formattedErrors };
+	}
 
-  return { valid: true, errors: null };
+	return { valid: true, errors: null };
 }
 
 module.exports = {
-  validateLoginInput,
-  validateLogin,
-  loginSchema
+	validateLoginInput,
+	validateLogin,
+	loginSchema,
 };

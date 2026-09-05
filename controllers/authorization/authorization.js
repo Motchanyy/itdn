@@ -117,18 +117,11 @@ const authorizationControllers = {
 					return res.status(400).json({ status: "error", message: "Invalid input data" });
 				}
 
-				// Рендер форми з полем 2FA.
-				// Пароль НІКОЛИ не повертаємо клієнту. Факт проходження першого
-				// фактора зберігаємо в захищеній серверній сесії (див. Правку 4).
-				req.session = req.session || {};
-				req.session.pending_tfa = {
-					userId: fullUser.id,
-					createdAt: Date.now(),
-				};
+				// Для форми
 				return res.render("pages/administrator/authorization/login/login", {
-					status: "tfa_required",
-					email: normalizedEmail,
-					error: null,
+					error: "Некоректні дані форми",
+					email: req.body.email || "",
+					status: null,
 				});
 			}
 
@@ -264,15 +257,14 @@ const authorizationControllers = {
 
 					// Рендер форми з полем 2FA
 					return res.render("pages/administrator/authorization/login/login", {
-						status: "2fa_required",
+						status: "tfa_required",
 						email: normalizedEmail,
-						password: password, // Тимчасово для hidden поля (краще використати сесію)
 						error: null,
 					});
 				}
 
-				const isValid2FA = verifyTOTP(fullUser.tfa_secret, two_factor_code);
-				if (!isValid2FA) {
+				const totpResult = verifyTOTP(fullUser.tfa_secret, two_factor_code, fullUser.tfa_last_step);
+				if (!totpResult.ok) {
 					await connection.rollback();
 					await logSecurityEvent(fullUser.id, clientIP, "login_failed_invalid_2fa", {}, userAgent);
 					const msg = "Невірний код 2FA";

@@ -47,7 +47,7 @@ config.util.setModuleDefaults("configMail", {
   from: process.env.MAIL_FROM,
 });
 
-for (const key of ["JWT_SECRET", "JWT_REFRESH_SECRET", "TFA_ENC_KEY", "APP_ENCRYPTION_KEY", "WEBCHAT_FILE_SECRET"]) {
+for (const key of ["JWT_SECRET", "JWT_REFRESH_SECRET", "TFA_ENC_KEY", "APP_ENCRYPTION_KEY", "WEBCHAT_FILE_SECRET", "SESSION_SECRET"]) {
   if (!process.env[key]) throw new Error(`[config] відсутній авто-секрет: ${key}. Запусти: node ensure-env.js`);
 }
 

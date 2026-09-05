@@ -197,7 +197,7 @@ const authorizationControllers = {
 			// КРОК 6: Отримання повних даних користувача
 			const [userRows] = await connection.execute(
 				`
-					SELECT id, email, password, first_name, last_name, role, tfa_enabled, tfa_secret, token_version
+					SELECT id, email, password, first_name, last_name, role, tfa_enabled, tfa_secret, tfa_last_step, token_version
 					FROM ${DB_PREFIX}users 
 					WHERE id = ?
 				`,
@@ -263,32 +263,61 @@ const authorizationControllers = {
 					});
 				}
 
-				const totpResult = verifyTOTP(fullUser.tfa_secret, two_factor_code, fullUser.tfa_last_step);
-				if (!totpResult.ok) {
+				const isBackup = req.body.backup === "true" || req.body.backup === true;
+				let tfaOk = false;
+
+				if (isBackup) {
+					// Вхід за одноразовим резервним кодом
+					const rawBackup = tfa.normalizeCode(two_factor_code);
+					if (tfa.isValidBackupFormat(rawBackup)) {
+						const codeHash = tfa.hashBackupCode(rawBackup);
+						const [bRows] = await connection.execute(
+							`SELECT id FROM ${DB_PREFIX}users_tfa_backup_codes
+							 WHERE id_user = ? AND code_hash = ? AND used_at IS NULL
+							 LIMIT 1 FOR UPDATE`,
+							[fullUser.id, codeHash]
+						);
+						if (bRows.length > 0) {
+							tfaOk = true;
+							// Гасимо використаний код у цій же транзакції
+							await connection.execute(`UPDATE ${DB_PREFIX}users_tfa_backup_codes SET used_at = NOW() WHERE id = ?`, [bRows[0].id]);
+						}
+					}
+				} else {
+					const totpResult = verifyTOTP(fullUser.tfa_secret, two_factor_code, fullUser.tfa_last_step);
+					if (totpResult.ok) {
+						tfaOk = true;
+						tfaStepUsed = totpResult.step;
+					}
+				}
+
+				if (!tfaOk) {
 					await connection.rollback();
-					await logSecurityEvent(fullUser.id, clientIP, "login_failed_invalid_2fa", {}, userAgent);
+					await logSecurityEvent(fullUser.id, clientIP, "login_failed_invalid_2fa", { backup: isBackup }, userAgent);
 					const msg = "Невірний код 2FA";
 					if (req.xhr || req.headers.accept.indexOf("json") > -1) {
-						return res.status(401).json({ status: "error", message: msg });
+						return res.status(401).json({ status: "invalid", message: msg });
 					}
 					return res.render("pages/administrator/authorization/login/login", {
 						error: msg,
 						email: normalizedEmail,
-						status: "2fa_required",
+						status: "tfa_required",
 					});
 				}
 			}
 
-			// КРОК 9: Успішний вхід - оновлення даних
+			// КРОК 9: Успішний вхід - оновлення даних.
+			// tfaStepUsed фіксуємо тільки якщо вхід був за TOTP (не backup) — anti-replay.
 			await connection.execute(
 				`
 					UPDATE ${DB_PREFIX}users 
 					SET failed_login_attempts = 0, locked_until = NULL,
 						last_login_ip = ?, date_last_login = NOW(),
+						tfa_last_step = ${tfaStepUsed !== null ? "GREATEST(tfa_last_step, ?)" : "tfa_last_step"},
 						token_version = token_version + 1, date_edit = NOW()
 					WHERE id = ?
 				`,
-				[clientIP, fullUser.id]
+				tfaStepUsed !== null ? [clientIP, tfaStepUsed, fullUser.id] : [clientIP, fullUser.id]
 			);
 
 			// КРОК 10: Збереження сесії в БД

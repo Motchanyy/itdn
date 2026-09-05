@@ -39,7 +39,7 @@ const displayNow = () => {
 const IG_ATTACH = { photo: "image", video: "video", audio: "audio", file: "file" };
 
 // ── Сторінка списку акаунтів (токенів) ──
-router.get("/contact-center/instagram/settings", authorizationControllers.isAuthenticated, (req, res) => {
+router.get("/contact-center/settings/instagram/", authorizationControllers.isAuthenticated, (req, res) => {
 	res.render("pages/contact-center/contact-center/instagram/settings", {
 		i18n: res,
 		user: req.user,
@@ -48,7 +48,7 @@ router.get("/contact-center/instagram/settings", authorizationControllers.isAuth
 });
 
 // ── Сторінка редагування конкретного акаунта ──
-router.get("/contact-center/instagram/settings/:id([0-9]+)", authorizationControllers.isAuthenticated, async (req, res) => {
+router.get("/contact-center/settings/instagram/:id([0-9]+)", authorizationControllers.isAuthenticated, async (req, res) => {
 	try {
 		console.log(prefix);
 		const [rows] = await connection_pool.query(`SELECT * FROM ${prefix}instagram_tokens WHERE id = ? LIMIT 1`, [req.params.id]);
@@ -141,8 +141,8 @@ router.post("/api/contact-center/instagram/oauth/start/", authorizationControlle
 // ── 2) Callback від Meta: code → long-lived → запис у БД ──
 router.get("/api/contact-center/instagram/oauth/callback", async (req, res) => {
 	const { code, state, error } = req.query;
-	if (error) return res.redirect("/contact-center/instagram/settings?err=denied");
-	if (!code || !state || !oauthStates.has(state)) return res.redirect("/contact-center/instagram/settings?err=state");
+	if (error) return res.redirect("/contact-center/settings/instagram/?err=denied");
+	if (!code || !state || !oauthStates.has(state)) return res.redirect("/contact-center/settings/instagram/?err=state");
 	oauthStates.delete(state);
 
 	try {
@@ -169,10 +169,10 @@ router.get("/api/contact-center/instagram/oauth/callback", async (req, res) => {
 			[self.igId, self.igId, self.username, enc, exp, self.username || "Instagram", "@" + (self.username || ""), defaultHours]
 		);
 
-		res.redirect("/contact-center/instagram/settings?ok=1");
+		res.redirect("/contact-center/settings/instagram/?ok=1");
 	} catch (e) {
 		logging.error(e);
-		res.redirect("/contact-center/instagram/settings?err=exchange");
+		res.redirect("/contact-center/settings/instagram/?err=exchange");
 	}
 });
 

@@ -31,7 +31,7 @@ router.get("/contact-center/", authorizationControllers.isAuthenticated, (req, r
 });
 
 router.get("/contact-center/settings/", authorizationControllers.isAuthenticated, (req, res) => {
-	res.render("pages/contact-center/contact-center/index", {
+	res.render("pages/contact-center/contact-center/settings", {
 		i18n: res,
 		user: req.user,
 		header: {
@@ -40,7 +40,7 @@ router.get("/contact-center/settings/", authorizationControllers.isAuthenticated
 	});
 });
 
-router.get("/contact-center/telegram/settings/", authorizationControllers.isAuthenticated, async (req, res) => {
+router.get("/contact-center/settings/telegram/", authorizationControllers.isAuthenticated, async (req, res) => {
 	try {
 		const notify_settings = await connection_pool.query("SELECT * FROM " + configDatabase.prefix + "telegram_notify_settings WHERE id = 1");
 		res.render("pages/contact-center/contact-center/telegram/settings", {
@@ -328,7 +328,7 @@ router.get("/contact-center/webchat/:token/", authorizationControllers.isAuthent
 });
 
 // ── Веб-чат: сторінка налаштувань сайтів ──
-router.get("/contact-center/webchat/settings/", authorizationControllers.isAuthenticated, (req, res) => {
+router.get("/contact-center/settings/webchat/", authorizationControllers.isAuthenticated, (req, res) => {
 	res.render("pages/contact-center/contact-center/webchat/settings", {
 		i18n: res,
 		user: req.user,
@@ -337,7 +337,7 @@ router.get("/contact-center/webchat/settings/", authorizationControllers.isAuthe
 });
 
 // ── Веб-чат: сторінка редагування сайту ──
-router.get("/contact-center/webchat/settings/:siteId/", authorizationControllers.isAuthenticated, async (req, res) => {
+router.get("/contact-center/settings/webchat/:siteId/", authorizationControllers.isAuthenticated, async (req, res) => {
 	const P = configDatabase.prefix;
 	const siteId = req.params.siteId;
 	try {
@@ -347,7 +347,7 @@ router.get("/contact-center/webchat/settings/:siteId/", authorizationControllers
              FROM ${P}web_chat_sites WHERE site_id = ? LIMIT 1`,
 			[siteId]
 		);
-		if (!rows.length) return res.redirect("/contact-center/webchat/settings/");
+		if (!rows.length) return res.redirect("/contact-center/settings/webchat/");
 
 		const site = rows[0];
 		if (site.config && typeof site.config === "object") site.config = JSON.stringify(site.config);

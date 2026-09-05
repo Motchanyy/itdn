@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Контакт Центр - Налаштування (Demo)</title>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --bg: #f3f4f6;
+            --surface: #ffffff;
+            --text: #1f2937;
+            --border: #e5e7eb;
+            --telegram: #229ED9;
+            --instagram: #E1306C;
+            --webchat: #10b981;
+            --facebook: #1877F2;
+        }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        /* Header */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .title h1 { margin: 0; font-size: 24px; }
+        .title p { margin: 4px 0 0; color: #6b7280; font-size: 14px; }
+        
+        .btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; transition: 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-danger { background: #ef4444; color: white; }
+
+        /* Filters */
+        .filters { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+        .filter-btn { padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: 13px; }
+        .filter-btn.active { background: var(--text); color: white; border-color: var(--text); }
+
+        /* Table/Card List */
+        .channels-list { background: var(--surface); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+        
+        .channel-item { display: flex; align-items: center; padding: 16px; border-bottom: 1px solid var(--border); transition: 0.2s; }
+        .channel-item:last-child { border-bottom: none; }
+        .channel-item:hover { background: #f9fafb; }
+        
+        .icon-box { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-right: 16px; font-weight: bold; color: white; font-size: 18px; }
+        .tg-bg { background: var(--telegram); }
+        .insta-bg { background: var(--instagram); }
+        .web-bg { background: var(--webchat); }
+        .fb-bg { background: var(--facebook); }
+
+        .info { flex: 1; }
+        .info h3 { margin: 0; font-size: 16px; font-weight: 600; }
+        .info p { margin: 4px 0 0; font-size: 13px; color: #6b7280; }
+        
+        .status-badge { font-size: 12px; padding: 2px 8px; border-radius: 12px; background: #d1fae5; color: #065f46; margin-left: 8px; }
+        .status-badge.inactive { background: #fee2e2; color: #991b1b; }
+
+        .actions { display: flex; gap: 8px; }
+
+        /* Views Simulation */
+        .view { display: none; }
+        .view.active { display: block; }
+
+        /* Form Styles */
+        .form-card { background: var(--surface); padding: 24px; border-radius: 8px; max-width: 600px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; }
+        .form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; }
+        .type-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        .type-option { border: 1px solid var(--border); padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; }
+        .type-option.selected { border-color: var(--primary); background: #eff6ff; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <!-- VIEW 1: LIST (READ) -->
+    <div id="view-list" class="view active">
+        <div class="header">
+            <div class="title">
+                <h1>Налаштування каналів</h1>
+                <p>Керуйте токенами Telegram, Instagram, WebChat та іншими в одному місці.</p>
+            </div>
+            <button class="btn btn-primary" onclick="navigateTo('new')">+ Додати канал</button>
+        </div>
+
+        <div class="filters">
+            <button class="filter-btn active">Всі канали</button>
+            <button class="filter-btn">Telegram</button>
+            <button class="filter-btn">Instagram</button>
+            <button class="filter-btn">WebChat</button>
+            <button class="filter-btn">Facebook</button>
+        </div>
+
+        <div class="channels-list">
+            <!-- Item 1 -->
+            <div class="channel-item" onclick="navigateTo('edit', 1)">
+                <div class="icon-box tg-bg">TG</div>
+                <div class="info">
+                    <h3>Support Bot <span class="status-badge">Активний</span></h3>
+                    <p>ID: 182930 • Токен: 5839...a92 • Оновлено: 2 хв тому</p>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-outline" style="font-size:12px">Редагувати</button>
+                </div>
+            </div>
+
+            <!-- Item 2 -->
+            <div class="channel-item" onclick="navigateTo('edit', 2)">
+                <div class="icon-box insta-bg">IG</div>
+                <div class="info">
+                    <h3>Shop Instagram Page <span class="status-badge">Активний</span></h3>
+                    <p>ID: 99281 • Access Token: EAAG...xx • Сторінка: myshop_ua</p>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-outline" style="font-size:12px">Редагувати</button>
+                </div>
+            </div>
+
+            <!-- Item 3 -->
+            <div class="channel-item" onclick="navigateTo('edit', 3)">
+                <div class="icon-box web-bg">WC</div>
+                <div class="info">
+                    <h3>Головний сайт <span class="status-badge inactive">Помилка</span></h3>
+                    <p>ID: 7732 • URL: example.com • Помилка авторизації</p>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-outline" style="font-size:12px">Редагувати</button>
+                </div>
+            </div>
+             <!-- Item 4 -->
+             <div class="channel-item" onclick="navigateTo('edit', 4)">
+                <div class="icon-box fb-bg">FB</div>
+                <div class="info">
+                    <h3>Facebook Page Main <span class="status-badge">Активний</span></h3>
+                    <p>ID: 5512 • Сторінка: MyBrand Official</p>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-outline" style="font-size:12px">Редагувати</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 2: CREATE (CREATE) -->
+    <div id="view-new" class="view">
+        <div class="header">
+            <div class="title">
+                <h1>Додати новий канал</h1>
+                <p>Оберіть тип інтеграції та заповніть дані.</p>
+            </div>
+            <button class="btn btn-outline" onclick="navigateTo('list')">← Назад до списку</button>
+        </div>
+
+        <div class="form-card">
+            <div class="form-group">
+                <label>Тип каналу</label>
+                <div class="type-selector">
+                    <div class="type-option selected" onclick="selectType(this, 'telegram')">Telegram Bot</div>
+                    <div class="type-option" onclick="selectType(this, 'instagram')">Instagram</div>
+                    <div class="type-option" onclick="selectType(this, 'webchat')">WebChat</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Назва для внутрішнього використання</label>
+                <input type="text" placeholder="Наприклад: Основний бот підтримки">
+            </div>
+
+            <div class="form-group">
+                <label>Token / API Key</label>
+                <input type="password" placeholder="Вставте токен сюди">
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:24px;">
+                <button class="btn btn-primary" style="flex:1" onclick="simulateSave()">Зберегти та активувати</button>
+                <button class="btn btn-outline" onclick="navigateTo('list')">Скасувати</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 3: EDIT (UPDATE/DELETE) -->
+    <div id="view-edit" class="view">
+        <div class="header">
+            <div class="title">
+                <h1 id="edit-title">Редагування каналу</h1>
+                <p>Змініть налаштування або видаліть інтеграцію.</p>
+            </div>
+            <button class="btn btn-outline" onclick="navigateTo('list')">← Назад</button>
+        </div>
+
+        <div class="form-card">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid var(--border);">
+                <div class="icon-box tg-bg" id="edit-icon">TG</div>
+                <div>
+                    <h2 style="margin:0" id="edit-name">Support Bot</h2>
+                    <span class="status-badge">Активний</span>
+                    <p style="margin:4px 0 0; font-size:12px; color:#666;">ID запису: <span id="edit-id">1</span></p>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Назва</label>
+                <input type="text" value="Support Bot">
+            </div>
+
+            <div class="form-group">
+                <label>Token</label>
+                <input type="password" value="583920192:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw">
+            </div>
+
+            <div class="form-group">
+                <label>Webhook URL (автоматично)</label>
+                <input type="text" value="https://api.yoursite.com/webhook/tg/1" disabled style="background:#f3f4f6; color:#999;">
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:24px; border-top:1px solid var(--border); paddingTop:20px;">
+                <button class="btn btn-primary" onclick="navigateTo('list')">Зберегти зміни</button>
+                <button class="btn btn-danger" style="margin-left:auto;" onclick="confirmDelete()">Видалити канал</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Simple Router Simulation
+    function navigateTo(view, id = null) {
+        document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+        
+        if (view === 'list') {
+            document.getElementById('view-list').classList.add('active');
+            window.history.pushState({}, '', '/contact-center/settings/');
+        } else if (view === 'new') {
+            document.getElementById('view-new').classList.add('active');
+            window.history.pushState({}, '', '/contact-center/settings/new/');
+        } else if (view === 'edit') {
+            document.getElementById('view-edit').classList.add('active');
+            // Імітація завантаження даних по ID
+            document.getElementById('edit-id').innerText = id;
+            if(id === 2) {
+                document.getElementById('edit-name').innerText = "Shop Instagram Page";
+                document.getElementById('edit-icon').className = "icon-box insta-bg";
+                document.getElementById('edit-icon').innerText = "IG";
+            } else if (id === 3) {
+                document.getElementById('edit-name').innerText = "Головний сайт";
+                document.getElementById('edit-icon').className = "icon-box web-bg";
+                document.getElementById('edit-icon').innerText = "WC";
+            } else {
+                document.getElementById('edit-name').innerText = "Support Bot";
+                document.getElementById('edit-icon').className = "icon-box tg-bg";
+                document.getElementById('edit-icon').innerText = "TG";
+            }
+            window.history.pushState({}, '', `/contact-center/settings/${id}/`);
+        }
+    }
+
+    function selectType(el, type) {
+        document.querySelectorAll('.type-option').forEach(e => e.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+
+    function simulateSave() {
+        alert("Токен збережено! Перенаправлення на сторінку редагування...");
+        navigateTo('edit', 99); // 99 - новостворений ID
+    }
+
+    function confirmDelete() {
+        if(confirm("Ви впевнені? Це видалить всі історії чатів, пов'язані з цим токеном.")) {
+            alert("Видалено!");
+            navigateTo('list');
+        }
+    }
+
+    // Handle browser back/forward
+    window.onpopstate = function() {
+        const path = window.location.pathname;
+        if (path.includes('/new/')) navigateTo('new');
+        else if (path.match(/\/settings\/\d+\//)) navigateTo('edit', 1);
+        else navigateTo('list');
+    };
+</script>
+
+</body>
+</html>

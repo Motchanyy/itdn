@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html class="h-100" lang="<%= i18n.__('lang_iso') %>">
+  <head>
+    <title><%= i18n.__('contact_center.telegram.settings.title') %></title>
+    <%- include('../../../../partials/head'); %>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css" />
+    <!-- tabulator -->
+    <link href="/assets/css/tabulator/tabulator.min.css" rel="stylesheet" />
+    <link href="/assets/css/tabulator/tabulator_bootstrap5.min.css" rel="stylesheet" />
+    <style>
+      #toket_list_table .tabulator-col,
+      #toket_list_table .tabulator-cell {
+        border-right: 1px solid #dee2e6;
+        border-bottom: 1px solid #dee2e6;
+      }
+
+      #toket_list_table .tabulator-col:last-child,
+      #toket_list_table .tabulator-cell:last-child {
+        border-right: none;
+      }
+
+      #toket_list_table .tabulator-row:last-child .tabulator-cell {
+        border-bottom: none;
+      }
+    </style>
+    <!-- END tabulator -->
+    <link href="/assets/css/scheduler/scheduler.css" rel="stylesheet" />
+  </head>
+
+  <body class="d-flex flex-column h-100">
+    <%- include('../../../../partials/header'); %>
+
+    <!-- ─── ХЛІБНІ КРИХТИ ─────────────────────────────────────────── -->
+    <div class="breadcrumbs pt-3 pb-3">
+      <div class="container-fluid">
+        <div class="row align-items-center">
+          <div class="col">
+            <span><%= i18n.__('contact_center.telegram.settings.title') %></span>
+            <div>
+              <ul class="list-inline mb-0">
+                <li class="list-inline-item">
+                  <a href="/">
+                    <i class="fas fa-home"></i>
+                    <span><%= i18n.__('contact_center.telegram.settings.breadcrumb.home') %></span>
+                  </a>
+                </li>
+                <li class="list-inline-item">
+                  <i class="fas fa-chevron-right"></i>
+                  <a href="/contact-center"><%= i18n.__('contact_center.telegram.settings.breadcrumb.contact_center') %></a>
+                </li>
+                <li class="list-inline-item">
+                  <i class="fas fa-chevron-right"></i>
+                  <%= i18n.__('contact_center.telegram.settings.breadcrumb.current') %>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-auto">
+            <a href="/contact-center" class="btn btn-primary rounded-0">
+              <i class="fa-solid fa-angle-left"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container-fluid mt-3">
+      <div class="row">
+        <div class="col-12 col-lg-12 mb-3">
+          <button type="button" class="btn btn-primary rounded-0 mb-3" id="btn_add_tg_token"><i class="fa-solid fa-plus me-1"></i><%= i18n.__('contact_center.telegram.settings.add_button') %></button>
+          <div class="card border-primary rounded-0">
+            <div class="card-header text-bg-primary rounded-0"><%= i18n.__('contact_center.telegram.settings.title') %></div>
+            <div id="toket_list_table"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: Create token -->
+    <div class="modal fade" id="modalCreateTgToken" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-0">
+          <div class="modal-header">
+            <h1 class="modal-title fs-5"><%= i18n.__('contact_center.telegram.settings.create_modal.title') %></h1>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label"><%= i18n.__('contact_center.telegram.settings.create_modal.name') %></label>
+              <input type="text" class="form-control rounded-0" id="create_tg_name" />
+            </div>
+            <div class="mb-2">
+              <label class="form-label"><%= i18n.__('contact_center.telegram.settings.create_modal.token') %></label>
+              <input type="text" class="form-control rounded-0" id="create_tg_token" placeholder="123456:ABC-..." />
+              <small class="text-muted"><%= i18n.__('contact_center.telegram.settings.create_modal.token_hint') %></small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary rounded-0" data-bs-dismiss="modal"><%= i18n.__('contact_center.telegram.settings.create_modal.close') %></button>
+            <button type="button" class="btn btn-primary rounded-0" id="btn_confirm_create_tg_token"><%= i18n.__('contact_center.telegram.settings.create_modal.create') %></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- END MODAL -->
+
+    <!-- MODAL: Delete token -->
+    <div class="modal fade" id="modalDeleteTgToken" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-0">
+          <div class="modal-header">
+            <h1 class="modal-title fs-5"><%= i18n.__('contact_center.telegram.settings.delete_modal.title') %></h1>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-2"><%= i18n.__('contact_center.telegram.settings.delete_modal.confirm_text') %></p>
+            <p class="mb-0">
+              <strong id="del_tg_name"></strong> <span class="text-muted">#<span id="del_tg_id"></span></span>
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary rounded-0" data-bs-dismiss="modal"><%= i18n.__('contact_center.telegram.settings.delete_modal.close') %></button>
+            <button type="button" class="btn btn-danger rounded-0" id="btn_confirm_delete_tg_token"><%= i18n.__('contact_center.telegram.settings.delete_modal.delete') %></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- END MODAL -->
+
+    <%- include('../../../../partials/footer'); %> <%- include('../../../../partials/script'); %>
+
+    <script src="/assets/js/notyf/notyf.min.js"></script>
+    <script>
+      const notyf = new Notyf({
+        position: { x: "right", y: "top" },
+        types: [
+          { type: "success", dismissible: true, icon: false },
+          { type: "error", background: "indianred", dismissible: true, icon: false },
+        ],
+      });
+    </script>
+    <script>
+      let delTgTokenId = null;
+      $(document).on("click", ".delete-tg-token-btn", function () {
+        delTgTokenId = $(this).data("id");
+        document.getElementById("del_tg_id").textContent = delTgTokenId;
+        document.getElementById("del_tg_name").textContent = $(this).data("name") || "";
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("modalDeleteTgToken")).show();
+      });
+
+      document.getElementById("btn_confirm_delete_tg_token").addEventListener("click", async function () {
+        const btn = this;
+        if (btn.disabled || !delTgTokenId) return;
+        const original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        try {
+          const res = await fetch("/api/contact-center/telegram/settings/token/delete/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: delTgTokenId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.status !== "success") throw new Error(data.message || "Error");
+          bootstrap.Modal.getOrCreateInstance(document.getElementById("modalDeleteTgToken")).hide();
+          notyf.success(data.message || "OK");
+          table.replaceData();
+        } catch (err) {
+          notyf.error(err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = original;
+        }
+      });
+    </script>
+    <script>
+      document.getElementById("btn_add_tg_token").addEventListener("click", function () {
+        document.getElementById("create_tg_name").value = "";
+        document.getElementById("create_tg_token").value = "";
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("modalCreateTgToken")).show();
+      });
+
+      document.getElementById("btn_confirm_create_tg_token").addEventListener("click", async function () {
+        const btn = this;
+        if (btn.disabled) return;
+        const original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        try {
+          const res = await fetch("/api/contact-center/telegram/settings/token/create/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: document.getElementById("create_tg_name").value,
+              token: document.getElementById("create_tg_token").value,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.status !== "success") throw new Error(data.message || "Error");
+          bootstrap.Modal.getOrCreateInstance(document.getElementById("modalCreateTgToken")).hide();
+          notyf.success("OK");
+          table.replaceData();
+          // одразу відкриваємо редагування нового токена
+          if (data.id) window.location.href = "/contact-center/telegram/settings/" + data.id;
+        } catch (err) {
+          notyf.error(err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = original;
+        }
+      });
+    </script>
+    <!-- Tabulator -->
+    <script src="/assets/js/tabulator/tabulator.min.js"></script>
+    <script>
+      // Переклади (з мовного файлу)
+      var TR = {
+        id: "<%= i18n.__('contact_center.telegram.settings.table.id') %>",
+        name: "<%= i18n.__('contact_center.telegram.settings.table.name') %>",
+        active: "<%= i18n.__('contact_center.telegram.settings.table.active') %>",
+        notify_active: "<%= i18n.__('contact_center.telegram.settings.table.notify_active') %>",
+        date_add: "<%= i18n.__('contact_center.telegram.settings.table.date_add') %>",
+        date_edit: "<%= i18n.__('contact_center.telegram.settings.table.date_edit') %>",
+        edit: "<%= i18n.__('contact_center.telegram.settings.table.edit') %>",
+        st_on: "<%= i18n.__('contact_center.telegram.settings.status.on') %>",
+        st_off: "<%= i18n.__('contact_center.telegram.settings.status.off') %>",
+        st_bot_on: "<%= i18n.__('contact_center.telegram.settings.status.bot_on') %>",
+      };
+
+      var table = new Tabulator("#toket_list_table", {
+        layout: "fitColumns",
+        ajaxURL: "/api/contact-center/telegram/token-list/",
+        ajaxConfig: "POST",
+        paginationSize: 5,
+        paginationSizeSelector: [10, 20, 30, 40],
+        pagination: true,
+        movableColumns: true,
+        columns: [
+          {
+            title: TR.id,
+            formatter: "rownum",
+            field: "id",
+            headerSort: false,
+            widthGrow: "1",
+          },
+          {
+            title: TR.name,
+            field: "name",
+            sorter: "string",
+            headerSort: false,
+          },
+          {
+            title: TR.active,
+            field: "active",
+            headerSort: false,
+            formatter: function (cell) {
+              return Number(cell.getValue()) === 1 ? '<span class="badge text-bg-success">' + TR.st_bot_on + "</span>" : '<span class="badge text-bg-secondary">' + TR.st_off + "</span>";
+            },
+          },
+          {
+            title: TR.notify_active,
+            field: "notify_active",
+            headerSort: false,
+            formatter: function (cell) {
+              return Number(cell.getValue()) === 1 ? '<span class="badge text-bg-success">' + TR.st_on + "</span>" : '<span class="badge text-bg-secondary">' + TR.st_off + "</span>";
+            },
+          },
+          {
+            title: TR.date_add,
+            field: "date_add",
+            sorter: "string",
+            headerSort: false,
+          },
+          {
+            title: TR.date_edit,
+            field: "date_edit",
+            sorter: "string",
+            headerSort: false,
+          },
+          {
+            title: TR.edit,
+            field: "",
+            headerSort: false,
+            widthGrow: "1",
+            formatter: function (cell) {
+              var d = cell.getRow().getData();
+              return '<div class="d-flex gap-2">' + '<a class="btn btn-primary rounded-0" href="/contact-center/telegram/settings/' + d.id + '"><i class="fa-regular fa-pen-to-square"></i></a>' + '<button type="button" class="btn btn-outline-danger rounded-0 delete-tg-token-btn" data-id="' + d.id + '" data-name="' + (d.name ? String(d.name).replace(/"/g, "&quot;") : "") + '"><i class="fa-regular fa-trash-can"></i></button>' + "</div>";
+            },
+          },
+        ],
+      });
+    </script>
+    <!-- END Tabulator -->
+  </body>
+</html>

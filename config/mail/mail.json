@@ -2,8 +2,8 @@
     "host": "growthcontour.com",
     "port": 465,
     "secure": true,
-    "user": "test@skyneuron.com",
-    "pass": "jJ8&ed7ceC$yhD3@owM4-ukX9*rL2_hs",
+    "user": "",
+    "pass": "",
     "from_name": "Growth Contour",
     "from_email": "test@growthcontour.com"
 }

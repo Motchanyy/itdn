@@ -41,7 +41,18 @@ const app = express();
 app.set("trust proxy", 1);
 
 // Захисні HTTP-заголовки (CSP, HSTS, X-Frame-Options тощо).
-app.use(helmet());
+app.use(
+	helmet({
+		contentSecurityPolicy: {
+			directives: {
+				defaultSrc: ["'self'"],
+				scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://code.jquery.com", "https://unpkg.com", "'unsafe-inline'"],
+				styleSrc: ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
+				imgSrc: ["'self'", "data:"],
+			},
+		},
+	})
+);
 
 // ─── СТВОРЕННЯ HTTP СЕРВЕРА ───────────────────────────
 const server = http.createServer(app);

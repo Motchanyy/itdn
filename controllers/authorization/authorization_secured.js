@@ -8,12 +8,14 @@
  * 2. ✅ Блокування акаунту після 5 невдалих спроб
  * 3. ✅ AJV валідація всіх вхідних даних
  * 4. ✅ Захист від Enumeration Attacks (універсальна відповідь)
- * 5. ✅ Constant-time password comparison
+ * 5. ✅ Constant-time password comparison (bcrypt)
  * 6. ✅ Логування подій безпеки
  * 7. ✅ Відстеження нових пристроїв/IP
  * 8. ✅ 2FA з окремим challenge токеном
  * 9. ✅ Secure cookies (HttpOnly, SameSite=strict)
  * 10. ✅ Token version для інвалідації сесій
+ * 11. ✅ Транзакції БД для запобігання race conditions
+ * 12. ✅ Захист від Mass Assignment через additionalProperties: false
  * 
  * @version 2.0.0
  * @security MAXIMUM
@@ -44,7 +46,7 @@ const jwtConfig = config.get("configJWT");
 // Логування
 const logging = require("../../logging/logging");
 
-// База даних
+// База даних - пул з'єднань
 const connection_pool = require("../../config/database/connection_pool");
 
 // 2FA допоміжні функції

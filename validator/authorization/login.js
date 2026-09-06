@@ -12,6 +12,7 @@ const addFormats = require("ajv-formats");
 const ajv = new Ajv({
 	allErrors: true,
 	strict: true,
+	allowUnionTypes: true, // Дозволяємо union-типи (напр. backup: string|boolean)
 	coerceTypes: false, // Не приводити типи автоматично
 	removeAdditional: false, // Не видаляти додаткові поля (ми їх відхиляємо)
 });
@@ -37,8 +38,7 @@ const loginSchema = {
 			// Додатково можна додати pattern для складності пароля
 		},
 		two_factor_code: {
-			type: "string",
-			nullable: true,
+			type: ["string", "null"],
 			// 6 цифр (TOTP) АБО 10 символів A-Z0-9 (backup-код)
 			pattern: "^(\\d{6}|[A-Za-z0-9]{10})$",
 			minLength: 6,
@@ -49,8 +49,7 @@ const loginSchema = {
 			default: false,
 		},
 		backup: {
-			type: ["string", "boolean"],
-			nullable: true,
+			type: ["string", "boolean", "null"],
 		},
 	},
 };

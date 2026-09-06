@@ -15,11 +15,8 @@ const config = require("../../config/config");
 const { jwt: jwtCfg } = config.get("configJWT");
 const { validateLoginInput } = require("../../validator/authorization/login"); // Новий AJV валідатор
 
-// ─── Конфігурація ────────────────────────────────────────────────────────────
-const config = require("../../config/config");
-const configDatabase = config.get("configDatabase");
-const prefix = configDatabase.prefix;
-// ─── Конфігурація ────────────────────────────────────────────────────────────
+// ─── Конфігурація БД ─────────────────────────────────────────────────────────
+const prefix = config.get("configDatabase").prefix;
 
 // Константи безпеки
 const SALT_ROUNDS = 12;
@@ -247,21 +244,19 @@ const authorizationControllers = {
 				if (!two_factor_code) {
 					await connection.rollback();
 
-					// Якщо це AJAX запит - повертаємо статус для фронтенду
+					// Пароль вірний — фіксуємо проміжний стан у серверній сесії.
+					// Пароль клієнту НЕ повертаємо; другий крок піде на /login/tfa/.
+					req.session.pending_tfa = {
+						userId: fullUser.id,
+						createdAt: Date.now(),
+					};
+
 					if (req.xhr || req.headers.accept.indexOf("json") > -1) {
-						req.session = req.session || {};
-						req.session.pending_tfa = {
-							userId: fullUser.id,
-							createdAt: Date.now(),
-						};
 						return res.status(200).json({
 							status: "tfa_required",
 							message: "Потрібен код 2FA",
-							email: normalizedEmail,
 						});
 					}
-
-					// Рендер форми з полем 2FA
 					return res.render("pages/administrator/authorization/login/login", {
 						status: "tfa_required",
 						email: normalizedEmail,
@@ -530,6 +525,196 @@ const authorizationControllers = {
 		} catch (error) {
 			console.error("[RESET PASSWORD ERROR]:", error);
 			res.status(500).json({ status: "error", message: "Помилка сервера" });
+		}
+	},
+
+	/**
+	 * Фабрика middleware перевірки прав доступу.
+	 * Використання: checkPermission("users.list", "view")
+	 * daction: view | add | edit | delete
+	 * Має стояти ПІСЛЯ isAuthenticated (потребує req.user).
+	 */
+	checkPermission: (slug, action = "view") => {
+		const columnByAction = {
+			view: "can_view",
+			add: "can_add",
+			edit: "can_edit",
+			delete: "can_delete",
+		};
+		const column = columnByAction[action] || "can_view";
+
+		return async (req, res, next) => {
+			try {
+				if (!req.user || !req.user.userId) {
+					return res.status(401).json({ status: "error", message: "Unauthorized" });
+				}
+
+				// Чи має користувач у якійсь зі своїх груп потрібний доступ до сторінки за slug.
+				const [rows] = await db.execute(
+					`SELECT 1
+					 FROM ${prefix}users_to_groups utg
+					 JOIN ${prefix}users_groups_permissions ugp ON ugp.id_group = utg.id_group
+					 JOIN ${prefix}users_permissions_pages upp ON upp.id = ugp.id_page
+					 WHERE utg.id_user = ? AND upp.slug = ? AND ugp.${column} = 1
+					 LIMIT 1`,
+					[req.user.userId, slug]
+				);
+
+				if (rows.length === 0) {
+					return res.status(403).json({ status: "error", message: "Forbidden" });
+				}
+
+				next();
+			} catch (error) {
+				console.error("[CHECK PERMISSION ERROR]:", error);
+				return res.status(500).json({ status: "error", message: "Internal server error" });
+			}
+		};
+	},
+
+	/**
+	 * Другий крок входу: перевірка коду 2FA.
+	 * userId береться ВИКЛЮЧНО з серверної сесії (pending_tfa),
+	 * а не з клієнта — пароль на цьому кроці не фігурує.
+	 */
+	loginTfa: async (req, res) => {
+		const clientIP = getClientIP(req);
+		const userAgent = req.headers["user-agent"] || "unknown";
+		const deviceFingerprint = getDeviceFingerprint(req);
+
+		const pending = req.session && req.session.pending_tfa;
+		// Проміжний стан живе обмежено (5 хв) — інакше вважаємо challenge простроченим.
+		if (!pending || Date.now() - pending.createdAt > 5 * 60 * 1000) {
+			if (req.session) delete req.session.pending_tfa;
+			return res.status(440).json({ status: "challenge_expired", message: "Сесія входу спливла" });
+		}
+
+		const { two_factor_code, backup } = req.body;
+		if (!two_factor_code) {
+			return res.status(400).json({ status: "error", message: "Потрібен код 2FA" });
+		}
+
+		let connection;
+		try {
+			connection = await db.getConnection();
+			await connection.beginTransaction();
+
+			const [rows] = await connection.execute(
+				`SELECT id, email, first_name, last_name, role, tfa_secret, tfa_last_step,
+						tfa_failed_attempts, tfa_locked_until, token_version, active
+				 FROM ${prefix}users WHERE id = ? FOR UPDATE`,
+				[pending.userId]
+			);
+			if (rows.length === 0 || rows[0].active !== 1) {
+				await connection.rollback();
+				delete req.session.pending_tfa;
+				return res.status(401).json({ status: "error", message: "Unauthorized" });
+			}
+			const user = rows[0];
+
+			// Блокування 2FA після серії невдалих кодів (окреме від парольного).
+			if (user.tfa_locked_until && new Date(user.tfa_locked_until) > new Date()) {
+				await connection.rollback();
+				const mins = Math.ceil((new Date(user.tfa_locked_until) - new Date()) / 60000);
+				return res.status(423).json({ status: "locked", errors: [{ minutes: mins }] });
+			}
+
+			const isBackup = backup === "true" || backup === true;
+			let tfaOk = false;
+			let tfaStepUsed = null;
+
+			if (isBackup) {
+				const raw = tfa.normalizeCode(two_factor_code);
+				if (tfa.isValidBackupFormat(raw)) {
+					const [b] = await connection.execute(
+						`SELECT id FROM ${prefix}users_tfa_backup_codes
+						 WHERE id_user = ? AND code_hash = ? AND used_at IS NULL LIMIT 1 FOR UPDATE`,
+						[user.id, tfa.hashBackupCode(raw)]
+					);
+					if (b.length > 0) {
+						tfaOk = true;
+						await connection.execute(`UPDATE ${prefix}users_tfa_backup_codes SET used_at = NOW() WHERE id = ?`, [b[0].id]);
+					}
+				}
+			} else {
+				const r = verifyTOTP(user.tfa_secret, two_factor_code, user.tfa_last_step);
+				if (r.ok) {
+					tfaOk = true;
+					tfaStepUsed = r.step;
+				}
+			}
+
+			if (!tfaOk) {
+				const failed = user.tfa_failed_attempts + 1;
+				const lock = failed >= LOCKOUT_THRESHOLD;
+				await connection.execute(
+					`UPDATE ${prefix}users
+					 SET tfa_failed_attempts = ?, tfa_locked_until = ?
+					 WHERE id = ?`,
+					[failed, lock ? new Date(Date.now() + LOCKOUT_DURATION_MS) : null, user.id]
+				);
+				await connection.commit();
+				await logSecurityEvent(user.id, clientIP, "login_failed_invalid_2fa", { backup: isBackup }, userAgent);
+				return res.status(401).json({ status: "invalid", message: "Невірний код 2FA" });
+			}
+
+			// Успіх: скидаємо лічильники, фіксуємо TOTP-крок, піднімаємо версію токенів.
+			await connection.execute(
+				`UPDATE ${prefix}users
+				 SET failed_login_attempts = 0, locked_until = NULL,
+					 tfa_failed_attempts = 0, tfa_locked_until = NULL,
+					 last_login_ip = ?, date_last_login = NOW(),
+					 tfa_last_step = ${tfaStepUsed !== null ? "GREATEST(tfa_last_step, ?)" : "tfa_last_step"},
+					 token_version = token_version + 1, date_edit = NOW()
+				 WHERE id = ?`,
+				tfaStepUsed !== null ? [clientIP, tfaStepUsed, user.id] : [clientIP, user.id]
+			);
+
+			await connection.execute(
+				`INSERT INTO ${prefix}users_sessions
+				 (id_user, ip_address, user_agent, device_fingerprint, created_at, expires_at, is_valid)
+				 VALUES (?, ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 24 HOUR), 1)
+				 ON DUPLICATE KEY UPDATE last_activity = NOW(), ip_address = VALUES(ip_address), is_valid = 1`,
+				[user.id, clientIP, userAgent, deviceFingerprint]
+			);
+
+			await connection.commit();
+
+			const accessToken = jwt.sign(
+				{
+					userId: user.id,
+					email: user.email,
+					firstName: user.first_name,
+					lastName: user.last_name,
+					role: user.role || "user",
+					type: "access",
+					jti: crypto.randomUUID(),
+					token_version: user.token_version + 1,
+				},
+				jwtCfg.jwt_secret,
+				{ expiresIn: JWT_EXPIRES_IN }
+			);
+
+			const cookieOptions = {
+				httpOnly: true,
+				secure: process.env.NODE_ENV === "production",
+				sameSite: "strict",
+				path: "/",
+				maxAge: 24 * 60 * 60 * 1000,
+			};
+			res.cookie("access_token", accessToken, cookieOptions);
+
+			// Проміжний стан більше не потрібен.
+			delete req.session.pending_tfa;
+
+			await logSecurityEvent(user.id, clientIP, "login_success", { via: "2fa" }, userAgent);
+			return res.json({ status: "success", url: "/administrator/dashboard" });
+		} catch (error) {
+			if (connection) await connection.rollback();
+			console.error("[LOGIN TFA ERROR]:", error);
+			return res.status(500).json({ status: "error", message: "Internal server error" });
+		} finally {
+			if (connection) connection.release();
 		}
 	},
 

@@ -86,6 +86,9 @@ router.get("/", (req, res) => {
  */
 router.post("/", loginLimiterByIp, loginLimiterByAccount, authorizationControllers.login);
 
+// Другий крок входу — перевірка коду 2FA (userId береться з сесії).
+router.post("/tfa/", loginLimiterByIp, authorizationControllers.loginTfa);
+
 // ---------------------------------------------------------------------
 // ВИХІД (LOGOUT)
 // ---------------------------------------------------------------------

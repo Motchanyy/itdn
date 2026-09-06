@@ -32,11 +32,11 @@
 							<form id="authorization_form">
 								<div class="mb-3">
 									<label for="email" class="form-label"> Email </label>
-									<input id="email" name="email" type="text" class="form-control rounded-0" />
+									<input id="email" name="email" type="email" autocomplete="username" class="form-control rounded-0" />
 								</div>
 								<div class="mb-3">
 									<label for="password" class="form-label"> <%= i18n.__('authorization.password') %> </label>
-									<input id="password" name="password" type="password" class="form-control rounded-0" />
+									<input id="password" name="password" type="password" autocomplete="current-password" class="form-control rounded-0" />
 								</div>
 								<button type="submit" class="btn btn-primary rounded-0 w-100"><%= i18n.__('authorization.sign_in') %></button>
 							</form>
@@ -98,17 +98,16 @@
 					var a = {
 						lang: $(this).attr("data-lang"),
 					};
-					(console.log(a),
-						$.ajax({
-							type: "POST",
-							url: "/lang",
-							data: a,
-							dataType: "json",
-							success: function (a) {
-								location.reload();
-							},
-							error: function (a) {},
-						}));
+					$.ajax({
+						type: "POST",
+						url: "/lang",
+						data: a,
+						dataType: "json",
+						success: function (a) {
+							location.reload();
+						},
+						error: function (a) {},
+					});
 				});
 			});
 		</script>
@@ -156,16 +155,26 @@
 
 						success: function (data) {
 							if (data.status === "success") {
-								window.location.href = data.url || "/";
+								window.location.href = data.url || "/administrator/dashboard";
 								return;
 							}
 
 							if (data.status === "tfa_required") {
+								// Пароль пройдено. Сервер зберіг проміжний стан у сесії.
+								// Прибираємо креденшели зі сторінки повністю — далі шлемо лише код.
+								$emailInput.val("");
+								$passwordInput.val("");
 								$("#authorization_form").hide();
 								$("#tfa_form").show();
 								$("#tfa_code").focus();
 								return;
 							}
+
+							// Будь-який інший успішний за HTTP статус — знімаємо стан завантаження.
+							$submitBtn.html(originalBtnHtml);
+							$emailInput.prop("disabled", false);
+							$passwordInput.prop("disabled", false);
+							$submitBtn.prop("disabled", false);
 						},
 
 						error: function (XHR) {
@@ -249,10 +258,8 @@
 
 					$.ajax({
 						type: "POST",
-						url: "/login/",
+						url: "/login/tfa/",
 						data: {
-							email: $("#authorization_form input[name='email']").val(),
-							password: $("#authorization_form input[name='password']").val(),
 							two_factor_code: $code.val(),
 							backup: $("#tfa_backup").val(),
 						},
